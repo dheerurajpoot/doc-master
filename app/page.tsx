@@ -34,27 +34,298 @@ type DownloadSettings = {
 	format: "png" | "jpeg";
 };
 
+function ImageWithCrop({
+	side,
+	src,
+	x,
+	y,
+	rotation,
+	scale,
+	isSelected,
+	isCropping,
+	cropArea,
+	onClick,
+	onCropClick,
+	onCropSave,
+	onCropCancel,
+	onCropAreaChange,
+	imageRef,
+}: {
+	side: "front" | "back";
+	src: string;
+	x: number;
+	y: number;
+	rotation: number;
+	scale: number;
+	isSelected: boolean;
+	isCropping: boolean;
+	cropArea?: { x: number; y: number; width: number; height: number };
+	onClick: () => void;
+	onCropClick: () => void;
+	onCropSave: () => void;
+	onCropCancel: () => void;
+	onCropAreaChange: (area: {
+		x: number;
+		y: number;
+		width: number;
+		height: number;
+	}) => void;
+	imageRef: (el: HTMLImageElement | null) => void;
+}) {
+	const [dragMode, setDragMode] = useState<
+		"move" | "resize-nw" | "resize-ne" | "resize-sw" | "resize-se" | null
+	>(null);
+	const dragStartRef = useRef<{
+		x: number;
+		y: number;
+		area: typeof cropArea;
+	} | null>(null);
+	const imgRef = useRef<HTMLImageElement | null>(null);
+
+	useEffect(() => {
+		if (isCropping && imgRef.current && !cropArea) {
+			const img = imgRef.current;
+			onCropAreaChange({
+				x: 0,
+				y: 0,
+				width: img.width,
+				height: img.height,
+			});
+		}
+	}, [isCropping, cropArea, onCropAreaChange]);
+
+	const startDrag = (
+		e: React.MouseEvent<HTMLDivElement>,
+		mode: "move" | "resize-nw" | "resize-ne" | "resize-sw" | "resize-se"
+	) => {
+		e.preventDefault();
+		e.stopPropagation();
+		if (!imgRef.current || !cropArea) return;
+		const rect = imgRef.current.getBoundingClientRect();
+		dragStartRef.current = {
+			x: e.clientX - rect.left,
+			y: e.clientY - rect.top,
+			area: { ...cropArea },
+		};
+		setDragMode(mode);
+	};
+
+	const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+		if (!dragMode || !imgRef.current || !dragStartRef.current || !cropArea)
+			return;
+		e.preventDefault();
+		e.stopPropagation();
+		const rect = imgRef.current.getBoundingClientRect();
+		const currentX = e.clientX - rect.left;
+		const currentY = e.clientY - rect.top;
+		const dx = currentX - dragStartRef.current.x;
+		const dy = currentY - dragStartRef.current.y;
+		const start = dragStartRef.current.area!;
+
+		let next = { ...start };
+
+		if (dragMode === "move") {
+			next.x = Math.min(
+				Math.max(0, start.x + dx),
+				rect.width - start.width
+			);
+			next.y = Math.min(
+				Math.max(0, start.y + dy),
+				rect.height - start.height
+			);
+		} else {
+			if (dragMode.includes("nw")) {
+				const newX = Math.max(0, start.x + dx);
+				const newY = Math.max(0, start.y + dy);
+				next.width = Math.max(40, start.width - (newX - start.x));
+				next.height = Math.max(40, start.height - (newY - start.y));
+				next.x = newX;
+				next.y = newY;
+			}
+			if (dragMode.includes("ne")) {
+				const newY = Math.max(0, start.y + dy);
+				const newW = Math.max(40, start.width + dx);
+				next.width = Math.min(newW, rect.width - start.x);
+				next.height = Math.max(40, start.height - (newY - start.y));
+				next.y = newY;
+			}
+			if (dragMode.includes("sw")) {
+				const newX = Math.max(0, start.x + dx);
+				const newH = Math.max(40, start.height + dy);
+				next.width = Math.max(40, start.width - (newX - start.x));
+				next.height = Math.min(newH, rect.height - start.y);
+				next.x = newX;
+			}
+			if (dragMode.includes("se")) {
+				next.width = Math.min(
+					Math.max(40, start.width + dx),
+					rect.width - start.x
+				);
+				next.height = Math.min(
+					Math.max(40, start.height + dy),
+					rect.height - start.y
+				);
+			}
+		}
+
+		onCropAreaChange(next);
+	};
+
+	const handleMouseUp = () => {
+		setDragMode(null);
+	};
+
+	const borderColor =
+		side === "front" ? "border-primary" : "border-secondary";
+	const ringColor = side === "front" ? "ring-primary" : "ring-secondary";
+
+	return (
+		<div
+			className={`absolute ${isSelected ? `ring-2 ${ringColor}` : ""} ${
+				isCropping ? "z-10" : ""
+			}`}
+			style={{
+				transform: `translate(${x}px, ${y}px) rotate(${rotation}deg) scale(${scale})`,
+				transformOrigin: "top left",
+			}}
+			onClick={(e) => {
+				if (!isCropping) {
+					onClick();
+				}
+			}}
+			onDoubleClick={(e) => {
+				if (!isCropping) {
+					onCropClick();
+				}
+			}}>
+			<div className='relative'>
+				<img
+					ref={(el) => {
+						imgRef.current = el;
+						imageRef(el);
+					}}
+					src={src || "/placeholder.svg"}
+					alt={side}
+					className={`max-w-xs h-auto ${borderColor} rounded`}
+					style={{ borderWidth: "2px" }}
+				/>
+				{isCropping && cropArea && (
+					<div
+						className='absolute inset-0'
+						onMouseMove={handleMouseMove}
+						onMouseUp={handleMouseUp}
+						onMouseLeave={handleMouseUp}>
+						{/* Dark overlay outside crop area */}
+						<svg className='absolute inset-0 w-full h-full pointer-events-none'>
+							<defs>
+								<mask id={`crop-mask-${side}`}>
+									<rect
+										width='100%'
+										height='100%'
+										fill='white'
+									/>
+									<rect
+										x={cropArea.x}
+										y={cropArea.y}
+										width={cropArea.width}
+										height={cropArea.height}
+										fill='black'
+									/>
+								</mask>
+							</defs>
+							<rect
+								width='100%'
+								height='100%'
+								fill='rgba(0,0,0,0.5)'
+								mask={`url(#crop-mask-${side})`}
+							/>
+						</svg>
+						{/* Crop box */}
+						<div
+							className='absolute border-2 border-accent bg-transparent cursor-move'
+							onMouseDown={(e) => startDrag(e, "move")}
+							style={{
+								left: cropArea.x,
+								top: cropArea.y,
+								width: cropArea.width,
+								height: cropArea.height,
+							}}>
+							{/* Resize handles */}
+							<div
+								onMouseDown={(e) => startDrag(e, "resize-nw")}
+								className='absolute w-3 h-3 -left-1.5 -top-1.5 rounded-full bg-accent border-2 border-background cursor-nw-resize'
+							/>
+							<div
+								onMouseDown={(e) => startDrag(e, "resize-ne")}
+								className='absolute w-3 h-3 -right-1.5 -top-1.5 rounded-full bg-accent border-2 border-background cursor-ne-resize'
+							/>
+							<div
+								onMouseDown={(e) => startDrag(e, "resize-sw")}
+								className='absolute w-3 h-3 -left-1.5 -bottom-1.5 rounded-full bg-accent border-2 border-background cursor-sw-resize'
+							/>
+							<div
+								onMouseDown={(e) => startDrag(e, "resize-se")}
+								className='absolute w-3 h-3 -right-1.5 -bottom-1.5 rounded-full bg-accent border-2 border-background cursor-se-resize'
+							/>
+						</div>
+						{/* Crop controls */}
+						<div className='absolute -bottom-12 left-0 right-0 flex gap-2 justify-center'>
+							<Button
+								onClick={(e) => {
+									e.stopPropagation();
+									onCropSave();
+								}}
+								size='sm'
+								className='bg-primary hover:bg-primary/90 text-xs px-3 py-1'>
+								Save Crop
+							</Button>
+							<Button
+								onClick={(e) => {
+									e.stopPropagation();
+									onCropCancel();
+								}}
+								size='sm'
+								variant='outline'
+								className='text-xs px-3 py-1'>
+								Cancel
+							</Button>
+						</div>
+					</div>
+				)}
+			</div>
+		</div>
+	);
+}
+
 export default function Home() {
 	const [images, setImages] = useState<ImageState>({});
 	const [selectedImage, setSelectedImage] = useState<"front" | "back">(
 		"front"
 	);
 	const [bgRemovalLoading, setBgRemovalLoading] = useState(false);
-	const [isCropping, setIsCropping] = useState(false);
+	const [croppingImage, setCroppingImage] = useState<"front" | "back" | null>(
+		null
+	);
+	const [cropAreas, setCropAreas] = useState<{
+		front?: { x: number; y: number; width: number; height: number };
+		back?: { x: number; y: number; width: number; height: number };
+	}>({});
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const cropCanvasRef = useRef<HTMLCanvasElement>(null);
-	const cropImageRef = useRef<HTMLImageElement>(null);
 	const previewWrapRef = useRef<HTMLDivElement>(null);
 	const [previewScale, setPreviewScale] = useState(1);
+	const imageRefs = useRef<{
+		front?: HTMLImageElement;
+		back?: HTMLImageElement;
+	}>({});
 	const [downloadSettings, setDownloadSettings] = useState<DownloadSettings>({
-		filename: "doc-master-document",
+		filename: "doc-master",
 		format: "png",
 	});
 
 	// A4 dimensions in pixels (at 96 DPI)
 	const A4_WIDTH = 616;
-	const A4_HEIGHT = 1056;
+	const A4_HEIGHT = 956;
 	const PREVIEW_W = A4_WIDTH / 2;
 	const PREVIEW_H = A4_HEIGHT / 2;
 
@@ -110,11 +381,21 @@ export default function Home() {
 		const canvas = canvasRef.current;
 		if (!canvas) return null;
 
+		// Use high DPI for quality (2x for retina displays)
+		const dpr = window.devicePixelRatio || 2;
+		const scaledWidth = A4_WIDTH * dpr;
+		const scaledHeight = A4_HEIGHT * dpr;
+
+		canvas.width = scaledWidth;
+		canvas.height = scaledHeight;
+
 		const ctx = canvas.getContext("2d");
 		if (!ctx) return null;
 
+		// Scale context to match DPI
+		ctx.scale(dpr, dpr);
+
 		// White background
-		ctx.clearRect(0, 0, A4_WIDTH, A4_HEIGHT);
 		ctx.fillStyle = "#ffffff";
 		ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
 
@@ -126,10 +407,18 @@ export default function Home() {
 				img.onload = () => {
 					try {
 						ctx.save();
-						ctx.translate(imgState.x, imgState.y);
+
+						// Preview is half size, canvas is full size, so multiply positions by 2
+						const canvasX = imgState.x * 2;
+						const canvasY = imgState.y * 2;
+
+						ctx.translate(canvasX, canvasY);
 						ctx.rotate((imgState.rotation * Math.PI) / 180);
 						ctx.scale(imgState.scale, imgState.scale);
+
+						// Image source is already cropped if user saved a crop
 						ctx.drawImage(img, 0, 0);
+
 						ctx.restore();
 						resolve();
 					} catch (e) {
@@ -202,19 +491,73 @@ export default function Home() {
 		}
 	};
 
-	const openCropTool = () => {
-		setIsCropping(true);
+	const startCrop = (side: "front" | "back") => {
+		setCroppingImage(side);
+		const img = imageRefs.current[side];
+		if (img && !cropAreas[side]) {
+			// Initialize crop area to cover full displayed image
+			setCropAreas({
+				...cropAreas,
+				[side]: {
+					x: 0,
+					y: 0,
+					width: img.width,
+					height: img.height,
+				},
+			});
+		}
 	};
 
-	const handleCropSave = (canvas: HTMLCanvasElement) => {
+	const saveCrop = (side: "front" | "back") => {
+		const img = imageRefs.current[side];
+		const crop = cropAreas[side];
+		if (!img || !crop || !images[side]) return;
+
+		// Convert displayed coordinates to natural image coordinates
+		const scaleX = img.naturalWidth / img.width;
+		const scaleY = img.naturalHeight / img.height;
+
+		const naturalCrop = {
+			x: crop.x * scaleX,
+			y: crop.y * scaleY,
+			width: crop.width * scaleX,
+			height: crop.height * scaleY,
+		};
+
+		const canvas = document.createElement("canvas");
+		canvas.width = naturalCrop.width;
+		canvas.height = naturalCrop.height;
+		const ctx = canvas.getContext("2d");
+		if (!ctx) return;
+
+		ctx.drawImage(
+			img,
+			naturalCrop.x,
+			naturalCrop.y,
+			naturalCrop.width,
+			naturalCrop.height,
+			0,
+			0,
+			naturalCrop.width,
+			naturalCrop.height
+		);
+
 		const croppedSrc = canvas.toDataURL("image/png");
 		updateImage({ src: croppedSrc });
-		setIsCropping(false);
+		setCroppingImage(null);
+		setCropAreas({ ...cropAreas, [side]: undefined });
+	};
+
+	const cancelCrop = () => {
+		setCroppingImage(null);
 	};
 
 	const handlePrint = async () => {
 		const canvas = await renderCanvasComposition();
 		if (!canvas) return;
+
+		// Use high quality PNG for printing
+		const dataUrl = canvas.toDataURL("image/png");
 
 		const printWindow = window.open("", "", "width=800,height=600");
 		if (printWindow) {
@@ -223,18 +566,21 @@ export default function Home() {
           <head>
             <title>Doc Master Print</title>
             <style>
+              @page { size: A4; margin: 0; }
               * { margin: 0; padding: 0; }
+              html, body { height: 100%; }
               body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #ffffff; }
-              img { max-width: 100%; height: auto; }
+              img { max-width: 100%; height: auto; page-break-inside: avoid; object-fit: contain; }
             </style>
           </head>
           <body>
-            <img src="${canvas.toDataURL("image/png")}" />
+            <img src="${dataUrl}" style="width: 210mm; height: auto;" />
           </body>
         </html>
       `);
 			printWindow.document.close();
-			setTimeout(() => printWindow.print(), 250);
+			printWindow.focus();
+			setTimeout(() => printWindow.print(), 400);
 		}
 	};
 
@@ -248,8 +594,15 @@ export default function Home() {
 		const baseName =
 			downloadSettings.filename.trim() || "doc-master-document";
 
+		// Use high quality for download (quality 0.95 for JPEG, default for PNG)
+		const quality = downloadSettings.format === "jpeg" ? 0.95 : undefined;
+		const dataUrl =
+			quality !== undefined
+				? canvas.toDataURL(mime, quality)
+				: canvas.toDataURL(mime);
+
 		const link = document.createElement("a");
-		link.href = canvas.toDataURL(mime);
+		link.href = dataUrl;
 		link.download = `${baseName}.${ext}`;
 		link.click();
 
@@ -323,62 +676,122 @@ export default function Home() {
 											) : (
 												<>
 													{images.front && (
-														<div
-															className={`absolute cursor-pointer ${
+														<ImageWithCrop
+															side='front'
+															src={
+																images.front.src
+															}
+															x={images.front.x}
+															y={images.front.y}
+															rotation={
+																images.front
+																	.rotation
+															}
+															scale={
+																images.front
+																	.scale
+															}
+															isSelected={
 																selectedImage ===
 																"front"
-																	? "ring-2 ring-primary"
-																	: ""
-															}`}
-															style={{
-																transform: `translate(${images.front.x}px, ${images.front.y}px) rotate(${images.front.rotation}deg) scale(${images.front.scale})`,
-																transformOrigin:
-																	"top left",
-															}}
+															}
+															isCropping={
+																croppingImage ===
+																"front"
+															}
+															cropArea={
+																cropAreas.front
+															}
 															onClick={() =>
 																setSelectedImage(
 																	"front"
 																)
-															}>
-															<img
-																src={
-																	images.front
-																		.src ||
-																	"/placeholder.svg"
-																}
-																alt='Front'
-																className='max-w-xs h-auto border border-primary rounded'
-															/>
-														</div>
+															}
+															onCropClick={() =>
+																startCrop(
+																	"front"
+																)
+															}
+															onCropSave={() =>
+																saveCrop(
+																	"front"
+																)
+															}
+															onCropCancel={
+																cancelCrop
+															}
+															onCropAreaChange={(
+																area
+															) =>
+																setCropAreas({
+																	...cropAreas,
+																	front: area,
+																})
+															}
+															imageRef={(el) => {
+																imageRefs.current.front =
+																	el ||
+																	undefined;
+															}}
+														/>
 													)}
 													{images.back && (
-														<div
-															className={`absolute cursor-pointer ${
+														<ImageWithCrop
+															side='back'
+															src={
+																images.back.src
+															}
+															x={images.back.x}
+															y={images.back.y}
+															rotation={
+																images.back
+																	.rotation
+															}
+															scale={
+																images.back
+																	.scale
+															}
+															isSelected={
 																selectedImage ===
 																"back"
-																	? "ring-2 ring-secondary"
-																	: ""
-															}`}
-															style={{
-																transform: `translate(${images.back.x}px, ${images.back.y}px) rotate(${images.back.rotation}deg) scale(${images.back.scale})`,
-																transformOrigin:
-																	"top left",
-															}}
+															}
+															isCropping={
+																croppingImage ===
+																"back"
+															}
+															cropArea={
+																cropAreas.back
+															}
 															onClick={() =>
 																setSelectedImage(
 																	"back"
 																)
-															}>
-															<img
-																src={
-																	images.back
-																		.src ||
-																	"/placeholder.svg"
-																}
-																alt='Back'
-																className='max-w-xs h-auto border border-secondary rounded'
-															/>
-														</div>
+															}
+															onCropClick={() =>
+																startCrop(
+																	"back"
+																)
+															}
+															onCropSave={() =>
+																saveCrop("back")
+															}
+															onCropCancel={
+																cancelCrop
+															}
+															onCropAreaChange={(
+																area
+															) =>
+																setCropAreas({
+																	...cropAreas,
+																	back: area,
+																})
+															}
+															imageRef={(el) => {
+																imageRefs.current.back =
+																	el ||
+																	undefined;
+															}}
+														/>
 													)}
 												</>
 											)}
@@ -388,54 +801,56 @@ export default function Home() {
 							</div>
 
 							{/* Action Buttons */}
-							<div className='flex flex-col sm:flex-row gap-3'>
-								<Button
-									onClick={handlePrint}
-									className='bg-accent hover:bg-accent/90 w-full sm:w-auto'>
-									<Download className='w-4 h-4 mr-2' />
-									Print
-								</Button>
-								<Button
-									onClick={downloadPDF}
-									variant='outline'
-									className='w-full sm:w-auto bg-transparent'>
-									<ArrowRight className='w-4 h-4 mr-2' />
-									Download
-								</Button>
-							</div>
-
-							{/* Download settings */}
-							<div className='mt-2 flex flex-col sm:flex-row gap-2 sm:items-center text-xs sm:text-sm text-muted-foreground'>
-								<div className='flex-1 flex items-center gap-2'>
-									<label className='whitespace-nowrap'>
-										File name:
-									</label>
-									<input
-										value={downloadSettings.filename}
-										onChange={(e) =>
-											persistDownloadSettings({
-												...downloadSettings,
-												filename: e.target.value,
-											})
-										}
-										className='flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs sm:text-sm'
-									/>
+							<div className='flex flex-col gap-3'>
+								<div className='flex flex-col sm:flex-row gap-3'>
+									<Button
+										onClick={handlePrint}
+										className='bg-accent hover:bg-accent/90 w-full sm:w-auto'>
+										<Download className='w-4 h-4 mr-2' />
+										Print
+									</Button>
+									<Button
+										onClick={downloadPDF}
+										variant='outline'
+										className='w-full sm:w-auto bg-transparent'>
+										<ArrowRight className='w-4 h-4 mr-2' />
+										Download
+									</Button>
 								</div>
-								<div className='flex items-center gap-2'>
-									<label>Format:</label>
-									<select
-										value={downloadSettings.format}
-										onChange={(e) =>
-											persistDownloadSettings({
-												...downloadSettings,
-												format: e.target
-													.value as DownloadSettings["format"],
-											})
-										}
-										className='rounded-md border border-border bg-background px-2 py-1 text-xs sm:text-sm'>
-										<option value='png'>PNG</option>
-										<option value='jpeg'>JPEG</option>
-									</select>
+
+								{/* Download settings */}
+								<div className='flex flex-col sm:flex-row gap-2 sm:items-center text-xs sm:text-sm text-muted-foreground'>
+									<div className='flex-1 flex items-center gap-2'>
+										<label className='whitespace-nowrap'>
+											File name:
+										</label>
+										<input
+											value={downloadSettings.filename}
+											onChange={(e) =>
+												persistDownloadSettings({
+													...downloadSettings,
+													filename: e.target.value,
+												})
+											}
+											className='flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs sm:text-sm'
+										/>
+									</div>
+									<div className='flex items-center gap-2'>
+										<label>Format:</label>
+										<select
+											value={downloadSettings.format}
+											onChange={(e) =>
+												persistDownloadSettings({
+													...downloadSettings,
+													format: e.target
+														.value as DownloadSettings["format"],
+												})
+											}
+											className='rounded-md border border-border bg-background px-2 py-1 text-xs sm:text-sm'>
+											<option value='png'>PNG</option>
+											<option value='jpeg'>JPEG</option>
+										</select>
+									</div>
 								</div>
 							</div>
 						</div>
@@ -621,7 +1036,9 @@ export default function Home() {
 												: "Remove Background"}
 										</Button>
 										<Button
-											onClick={openCropTool}
+											onClick={() =>
+												startCrop(selectedImage)
+											}
 											variant='outline'
 											className='w-full bg-transparent'>
 											<Crop2 className='w-4 h-4 mr-2' />
@@ -635,6 +1052,10 @@ export default function Home() {
 											const newImages = { ...images };
 											delete newImages[selectedImage];
 											setImages(newImages);
+											setCropAreas({
+												...cropAreas,
+												[selectedImage]: undefined,
+											});
 										}}
 										variant='destructive'
 										className='w-full'>
@@ -685,217 +1106,6 @@ export default function Home() {
 					</div>
 				</section>
 			</main>
-
-			{isCropping && images[selectedImage] && (
-				<div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4'>
-					<div className='bg-card rounded-xl max-w-2xl w-full max-h-96 overflow-auto'>
-						<div className='p-6 border-b border-border flex justify-between items-center sticky top-0 bg-card'>
-							<h2 className='text-xl font-semibold'>
-								Crop Image
-							</h2>
-							<button
-								onClick={() => setIsCropping(false)}
-								className='text-muted-foreground hover:text-foreground'>
-								✕
-							</button>
-						</div>
-						<div className='p-6 space-y-4'>
-							<CropTool
-								src={images[selectedImage]!.src}
-								onSave={handleCropSave}
-								onCancel={() => setIsCropping(false)}
-								cropCanvasRef={cropCanvasRef}
-								cropImageRef={cropImageRef}
-							/>
-						</div>
-					</div>
-				</div>
-			)}
-		</div>
-	);
-}
-
-function CropTool({
-	src,
-	onSave,
-	onCancel,
-	cropCanvasRef,
-	cropImageRef,
-}: {
-	src: string;
-	onSave: (canvas: HTMLCanvasElement) => void;
-	onCancel: () => void;
-	cropCanvasRef: React.RefObject<HTMLCanvasElement | null>;
-	cropImageRef: React.RefObject<HTMLImageElement | null>;
-}) {
-	const [cropArea, setCropArea] = useState({
-		x: 40,
-		y: 40,
-		width: 220,
-		height: 220,
-	});
-	const [dragMode, setDragMode] = useState<
-		"move" | "resize-nw" | "resize-ne" | "resize-sw" | "resize-se" | null
-	>(null);
-	const dragStartRef = useRef<{
-		x: number;
-		y: number;
-		area: typeof cropArea;
-	} | null>(null);
-
-	const startDrag = (
-		e: React.MouseEvent<HTMLDivElement>,
-		mode: "move" | "resize-nw" | "resize-ne" | "resize-sw" | "resize-se"
-	) => {
-		e.preventDefault();
-		if (!cropImageRef.current) return;
-		const rect = cropImageRef.current.getBoundingClientRect();
-		dragStartRef.current = {
-			x: e.clientX - rect.left,
-			y: e.clientY - rect.top,
-			area: { ...cropArea },
-		};
-		setDragMode(mode);
-	};
-
-	const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-		if (!dragMode || !cropImageRef.current || !dragStartRef.current) return;
-		const rect = cropImageRef.current.getBoundingClientRect();
-		const currentX = e.clientX - rect.left;
-		const currentY = e.clientY - rect.top;
-		const dx = currentX - dragStartRef.current.x;
-		const dy = currentY - dragStartRef.current.y;
-		const start = dragStartRef.current.area;
-
-		let next = { ...start };
-
-		if (dragMode === "move") {
-			next.x = Math.min(
-				Math.max(0, start.x + dx),
-				rect.width - start.width
-			);
-			next.y = Math.min(
-				Math.max(0, start.y + dy),
-				rect.height - start.height
-			);
-		} else {
-			if (dragMode.includes("nw")) {
-				const newX = Math.max(0, start.x + dx);
-				const newY = Math.max(0, start.y + dy);
-				next.width = Math.max(40, start.width - (newX - start.x));
-				next.height = Math.max(40, start.height - (newY - start.y));
-				next.x = newX;
-				next.y = newY;
-			}
-			if (dragMode.includes("ne")) {
-				const newY = Math.max(0, start.y + dy);
-				const newW = Math.max(40, start.width + dx);
-				next.width = Math.min(newW, rect.width - start.x);
-				next.height = Math.max(40, start.height - (newY - start.y));
-				next.y = newY;
-			}
-			if (dragMode.includes("sw")) {
-				const newX = Math.max(0, start.x + dx);
-				const newH = Math.max(40, start.height + dy);
-				next.width = Math.max(40, start.width - (newX - start.x));
-				next.height = Math.min(newH, rect.height - start.y);
-				next.x = newX;
-			}
-			if (dragMode.includes("se")) {
-				next.width = Math.min(
-					Math.max(40, start.width + dx),
-					rect.width - start.x
-				);
-				next.height = Math.min(
-					Math.max(40, start.height + dy),
-					rect.height - start.y
-				);
-			}
-		}
-
-		setCropArea(next);
-	};
-
-	const handleMouseUp = () => {
-		setDragMode(null);
-	};
-
-	const executeCrop = () => {
-		if (!cropImageRef.current || !cropCanvasRef.current) return;
-		const ctx = cropCanvasRef.current.getContext("2d");
-		if (!ctx) return;
-
-		cropCanvasRef.current.width = cropArea.width;
-		cropCanvasRef.current.height = cropArea.height;
-		ctx.drawImage(
-			cropImageRef.current,
-			cropArea.x,
-			cropArea.y,
-			cropArea.width,
-			cropArea.height,
-			0,
-			0,
-			cropArea.width,
-			cropArea.height
-		);
-		onSave(cropCanvasRef.current);
-	};
-
-	return (
-		<div className='space-y-4'>
-			<div
-				onMouseMove={handleMouseMove}
-				onMouseUp={handleMouseUp}
-				onMouseLeave={handleMouseUp}
-				className='relative inline-block border-2 border-primary rounded bg-muted p-2'>
-				<img
-					ref={cropImageRef}
-					src={src || "/placeholder.svg"}
-					alt='Crop'
-					className='max-w-sm h-auto block'
-				/>
-				<div
-					className='absolute border-2 border-accent bg-accent/20 cursor-move'
-					onMouseDown={(e) => startDrag(e, "move")}
-					style={{
-						left: cropArea.x,
-						top: cropArea.y,
-						width: cropArea.width,
-						height: cropArea.height,
-					}}>
-					{/* Resize handles */}
-					<div
-						onMouseDown={(e) => startDrag(e, "resize-nw")}
-						className='absolute w-3 h-3 -left-1.5 -top-1.5 rounded-full bg-accent border border-background cursor-nw-resize'
-					/>
-					<div
-						onMouseDown={(e) => startDrag(e, "resize-ne")}
-						className='absolute w-3 h-3 -right-1.5 -top-1.5 rounded-full bg-accent border border-background cursor-ne-resize'
-					/>
-					<div
-						onMouseDown={(e) => startDrag(e, "resize-sw")}
-						className='absolute w-3 h-3 -left-1.5 -bottom-1.5 rounded-full bg-accent border border-background cursor-sw-resize'
-					/>
-					<div
-						onMouseDown={(e) => startDrag(e, "resize-se")}
-						className='absolute w-3 h-3 -right-1.5 -bottom-1.5 rounded-full bg-accent border border-background cursor-se-resize'
-					/>
-				</div>
-			</div>
-			<div className='flex gap-3'>
-				<Button
-					onClick={executeCrop}
-					className='bg-primary hover:bg-primary/90 flex-1'>
-					Save Crop
-				</Button>
-				<Button
-					onClick={onCancel}
-					variant='outline'
-					className='flex-1 bg-transparent'>
-					Cancel
-				</Button>
-			</div>
-			<canvas ref={cropCanvasRef} className='hidden' />
 		</div>
 	);
 }
