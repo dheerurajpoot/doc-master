@@ -1,0 +1,173 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #F8F8F9;
+--foreground: #080C0F;
+
+--card: #FFFFFF;
+--card-foreground: #080C0F;
+
+--popover: #FFFFFF;
+--popover-foreground: #080C0F;
+
+--primary: #2A5397;
+--primary-foreground: #F8F8F9;
+
+--secondary: #446C95;
+--secondary-foreground: #FFFFFF;
+
+--muted: #E7E8E8;
+--muted-foreground: #7A7F87;
+
+--accent: #AC1922;
+--accent-foreground: #FFFFFF;
+
+--destructive: #E5482A;
+--destructive-foreground: #E5482A;
+
+--border: #E4E4E5;
+--input: #F2F2F3;
+--ring: #2A5397;
+
+/* Charts */
+--chart-1: #2A5397;
+--chart-2: #446C95;
+--chart-3: #AC1922;
+--chart-4: #6FA3C8;
+--chart-5: #86B6B0;
+
+/* Sidebar */
+--sidebar: #F8F8F9;
+--sidebar-foreground: #080C0F;
+--sidebar-primary: #2A5397;
+--sidebar-primary-foreground: #F8F8F9;
+--sidebar-accent: #AC1922;
+--sidebar-accent-foreground: #FFFFFF;
+--sidebar-border: #E4E4E5;
+--sidebar-ring: #2A5397;
+
+  
+}
+
+.dark {
+  --background: #0D1117;
+--foreground: #F5F6F7;
+
+--card: #151B22;
+--card-foreground: #F5F6F7;
+
+--popover: #151B22;
+--popover-foreground: #F5F6F7;
+
+--primary: #5B8EE6;
+--primary-foreground: #0D1117;
+
+--secondary: #7A9ED6;
+--secondary-foreground: #0D1117;
+
+--muted: #2B3440;
+--muted-foreground: #A9B0BA;
+
+--accent: #E53B2E;
+--accent-foreground: #0D1117;
+
+--destructive: #A7342C;
+--destructive-foreground: #E84B3A;
+
+--border: #2B3440;
+--input: #222A35;
+--ring: #5B8EE6;
+
+/* Charts */
+--chart-1: #5B8EE6;
+--chart-2: #7A9ED6;
+--chart-3: #E53B2E;
+--chart-4: #8FC1E3;
+--chart-5: #9FD0C8;
+
+/* Sidebar */
+--sidebar: #10151C;
+--sidebar-foreground: #F5F6F7;
+--sidebar-primary: #5B8EE6;
+--sidebar-primary-foreground: #F5F6F7;
+--sidebar-accent: #E53B2E;
+--sidebar-accent-foreground: #F5F6F7;
+--sidebar-border: #2B3440;
+--sidebar-ring: #5B8EE6;
+
+}
+
+@theme inline {
+  --font-sans: "Geist", "Geist Fallback";
+  --font-mono: "Geist Mono", "Geist Mono Fallback";
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Added smooth scrolling and custom scrollbar styling */
+html {
+  scroll-behavior: smooth;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--muted);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary);
+}
