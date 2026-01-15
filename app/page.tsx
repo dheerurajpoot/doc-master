@@ -3,14 +3,7 @@
 import type React from "react";
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import {
-	Upload,
-	Trash2,
-	Download,
-	Wand2,
-	Crop as Crop2,
-	ArrowRight,
-} from "lucide-react";
+import { Upload, Trash2, Download, Wand2, ArrowRight } from "lucide-react";
 
 interface ImageState {
 	front?: {
@@ -122,7 +115,7 @@ function ImageWithCrop({
 		const dy = currentY - dragStartRef.current.y;
 		const start = dragStartRef.current.area!;
 
-		let next = { ...start };
+		const next = { ...start };
 
 		if (dragMode === "move") {
 			next.x = Math.min(
@@ -188,12 +181,12 @@ function ImageWithCrop({
 				transform: `translate(${x}px, ${y}px) rotate(${rotation}deg) scale(${scale})`,
 				transformOrigin: "top left",
 			}}
-			onClick={(e) => {
+			onClick={() => {
 				if (!isCropping) {
 					onClick();
 				}
 			}}
-			onDoubleClick={(e) => {
+			onDoubleClick={() => {
 				if (!isCropping) {
 					onCropClick();
 				}
@@ -253,23 +246,23 @@ function ImageWithCrop({
 							{/* Resize handles */}
 							<div
 								onMouseDown={(e) => startDrag(e, "resize-nw")}
-								className='absolute w-3 h-3 -left-1.5 -top-1.5 rounded-full bg-accent border-2 border-background cursor-nw-resize'
+								className='absolute w-3.5 h-3.5 -left-1.5 -top-1.5 rounded-full bg-accent border-2 border-background cursor-nw-resize shadow-sm transition-transform hover:scale-110'
 							/>
 							<div
 								onMouseDown={(e) => startDrag(e, "resize-ne")}
-								className='absolute w-3 h-3 -right-1.5 -top-1.5 rounded-full bg-accent border-2 border-background cursor-ne-resize'
+								className='absolute w-3.5 h-3.5 -right-1.5 -top-1.5 rounded-full bg-accent border-2 border-background cursor-ne-resize shadow-sm transition-transform hover:scale-110'
 							/>
 							<div
 								onMouseDown={(e) => startDrag(e, "resize-sw")}
-								className='absolute w-3 h-3 -left-1.5 -bottom-1.5 rounded-full bg-accent border-2 border-background cursor-sw-resize'
+								className='absolute w-3.5 h-3.5 -left-1.5 -bottom-1.5 rounded-full bg-accent border-2 border-background cursor-sw-resize shadow-sm transition-transform hover:scale-110'
 							/>
 							<div
 								onMouseDown={(e) => startDrag(e, "resize-se")}
-								className='absolute w-3 h-3 -right-1.5 -bottom-1.5 rounded-full bg-accent border-2 border-background cursor-se-resize'
+								className='absolute w-3.5 h-3.5 -right-1.5 -bottom-1.5 rounded-full bg-accent border-2 border-background cursor-se-resize shadow-sm transition-transform hover:scale-110'
 							/>
 						</div>
 						{/* Crop controls */}
-						<div className='absolute -bottom-12 left-0 right-0 flex gap-2 justify-center'>
+						<div className='absolute -bottom-12 left-0 right-0 flex gap-2 justify-center bg-background/80 backdrop-blur-sm rounded-md p-2 border border-border shadow-sm'>
 							<Button
 								onClick={(e) => {
 									e.stopPropagation();
@@ -567,14 +560,28 @@ export default function Home() {
             <title>Doc Master Print</title>
             <style>
               @page { size: A4; margin: 0; }
-              * { margin: 0; padding: 0; }
-              html, body { height: 100%; }
-              body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #ffffff; }
-              img { max-width: 100%; height: auto; page-break-inside: avoid; object-fit: contain; }
+              html, body { margin: 0; padding: 0; }
+              .page {
+                width: 210mm;
+                height: 297mm;
+                margin: 0;
+                page-break-after: avoid;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #ffffff;
+              }
+              img {
+                width: 210mm;
+                height: 297mm;
+                object-fit: contain;
+              }
             </style>
           </head>
           <body>
-            <img src="${dataUrl}" style="width: 210mm; height: auto;" />
+            <div class="page">
+              <img src="${dataUrl}" />
+            </div>
           </body>
         </html>
       `);
@@ -591,8 +598,7 @@ export default function Home() {
 		const mime =
 			downloadSettings.format === "jpeg" ? "image/jpeg" : "image/png";
 		const ext = downloadSettings.format === "jpeg" ? "jpg" : "png";
-		const baseName =
-			downloadSettings.filename.trim() || "doc-master-document";
+		const baseName = downloadSettings.filename.trim() || "doc-master";
 
 		// Use high quality for download (quality 0.95 for JPEG, default for PNG)
 		const quality = downloadSettings.format === "jpeg" ? 0.95 : undefined;
@@ -644,7 +650,7 @@ export default function Home() {
 											height: PREVIEW_H * previewScale,
 										}}>
 										<div
-											className='relative bg-white rounded-md shadow-sm overflow-hidden'
+											className='relative bg-white rounded-lg shadow-md overflow-hidden border border-dashed border-muted-foreground/40'
 											style={{
 												width: PREVIEW_W,
 												height: PREVIEW_H,
@@ -702,11 +708,14 @@ export default function Home() {
 															cropArea={
 																cropAreas.front
 															}
-															onClick={() =>
+															onClick={() => {
 																setSelectedImage(
 																	"front"
-																)
-															}
+																);
+																startCrop(
+																	"front"
+																);
+															}}
 															onCropClick={() =>
 																startCrop(
 																	"front"
@@ -762,11 +771,14 @@ export default function Home() {
 															cropArea={
 																cropAreas.back
 															}
-															onClick={() =>
+															onClick={() => {
 																setSelectedImage(
 																	"back"
-																)
-															}
+																);
+																startCrop(
+																	"back"
+																);
+															}}
 															onCropClick={() =>
 																startCrop(
 																	"back"
@@ -819,7 +831,7 @@ export default function Home() {
 								</div>
 
 								{/* Download settings */}
-								<div className='flex flex-col sm:flex-row gap-2 sm:items-center text-xs sm:text-sm text-muted-foreground'>
+								<div className='flex flex-row gap-2 sm:items-center text-xs sm:text-sm text-muted-foreground'>
 									<div className='flex-1 flex items-center gap-2'>
 										<label className='whitespace-nowrap'>
 											File name:
@@ -1034,15 +1046,6 @@ export default function Home() {
 											{bgRemovalLoading
 												? "Removing..."
 												: "Remove Background"}
-										</Button>
-										<Button
-											onClick={() =>
-												startCrop(selectedImage)
-											}
-											variant='outline'
-											className='w-full bg-transparent'>
-											<Crop2 className='w-4 h-4 mr-2' />
-											Crop Image
 										</Button>
 									</div>
 

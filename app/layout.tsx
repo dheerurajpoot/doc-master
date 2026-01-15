@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { TopNav, BottomNav } from "@/components/navigation";
+import Footer from "@/components/footer";
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
@@ -11,7 +12,6 @@ export const metadata: Metadata = {
 	title: "Doc Master - Professional Document Alignment & Printing",
 	description:
 		"Align, crop, and prepare your documents for printing on A4 paper with AI-powered background removal. Free, fast, and professional.",
-	generator: "v0.app",
 	icons: {
 		icon: [
 			{
@@ -42,6 +42,7 @@ export default function RootLayout({
 				<TopNav />
 				{children}
 				<BottomNav />
+				<Footer />
 			</body>
 		</html>
 	);
