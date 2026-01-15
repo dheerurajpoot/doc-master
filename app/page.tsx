@@ -29,6 +29,11 @@ interface ImageState {
 	};
 }
 
+type DownloadSettings = {
+	filename: string;
+	format: "png" | "jpeg";
+};
+
 export default function Home() {
 	const [images, setImages] = useState<ImageState>({});
 	const [selectedImage, setSelectedImage] = useState<"front" | "back">(
@@ -42,6 +47,10 @@ export default function Home() {
 	const cropImageRef = useRef<HTMLImageElement>(null);
 	const previewWrapRef = useRef<HTMLDivElement>(null);
 	const [previewScale, setPreviewScale] = useState(1);
+	const [downloadSettings, setDownloadSettings] = useState<DownloadSettings>({
+		filename: "doc-master-document",
+		format: "png",
+	});
 
 	// A4 dimensions in pixels (at 96 DPI)
 	const A4_WIDTH = 616;
@@ -63,6 +72,84 @@ export default function Home() {
 		return () => ro.disconnect();
 	}, [PREVIEW_W]);
 
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+		try {
+			const stored = window.localStorage.getItem(
+				"doc-master-download-settings"
+			);
+			if (stored) {
+				const parsed = JSON.parse(stored) as DownloadSettings;
+				if (
+					parsed &&
+					typeof parsed.filename === "string" &&
+					(parsed.format === "png" || parsed.format === "jpeg")
+				) {
+					setDownloadSettings(parsed);
+				}
+			}
+		} catch {
+			// ignore
+		}
+	}, []);
+
+	const persistDownloadSettings = (next: DownloadSettings) => {
+		setDownloadSettings(next);
+		if (typeof window === "undefined") return;
+		try {
+			window.localStorage.setItem(
+				"doc-master-download-settings",
+				JSON.stringify(next)
+			);
+		} catch {
+			// ignore
+		}
+	};
+
+	const renderCanvasComposition = async () => {
+		const canvas = canvasRef.current;
+		if (!canvas) return null;
+
+		const ctx = canvas.getContext("2d");
+		if (!ctx) return null;
+
+		// White background
+		ctx.clearRect(0, 0, A4_WIDTH, A4_HEIGHT);
+		ctx.fillStyle = "#ffffff";
+		ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
+
+		const drawImageOnCanvas = (
+			imgState: NonNullable<ImageState["front"]>
+		) =>
+			new Promise<void>((resolve, reject) => {
+				const img = new Image();
+				img.onload = () => {
+					try {
+						ctx.save();
+						ctx.translate(imgState.x, imgState.y);
+						ctx.rotate((imgState.rotation * Math.PI) / 180);
+						ctx.scale(imgState.scale, imgState.scale);
+						ctx.drawImage(img, 0, 0);
+						ctx.restore();
+						resolve();
+					} catch (e) {
+						reject(e);
+					}
+				};
+				img.onerror = reject;
+				img.src = imgState.src;
+			});
+
+		if (images.front) {
+			await drawImageOnCanvas(images.front);
+		}
+		if (images.back) {
+			await drawImageOnCanvas(images.back);
+		}
+
+		return canvas;
+	};
+
 	const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
 		if (!file) return;
@@ -74,9 +161,9 @@ export default function Home() {
 				...images,
 				[selectedImage]: {
 					src,
-					scale: 0.6, // Slightly smaller than before
+					scale: 0.5, // Slightly smaller than before
 					x: (A4_WIDTH / 2) * 0.25, // Center horizontally
-					y: selectedImage === "front" ? 40 : 280, // Front: top gap, Back: below front
+					y: selectedImage === "front" ? 40 : 180, // Front: top gap, Back: below front
 					rotation: 0,
 				},
 			});
@@ -126,7 +213,7 @@ export default function Home() {
 	};
 
 	const handlePrint = async () => {
-		const canvas = canvasRef.current;
+		const canvas = await renderCanvasComposition();
 		if (!canvas) return;
 
 		const printWindow = window.open("", "", "width=800,height=600");
@@ -137,12 +224,12 @@ export default function Home() {
             <title>Doc Master Print</title>
             <style>
               * { margin: 0; padding: 0; }
-              body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+              body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #ffffff; }
               img { max-width: 100%; height: auto; }
             </style>
           </head>
           <body>
-            ${canvas.outerHTML}
+            <img src="${canvas.toDataURL("image/png")}" />
           </body>
         </html>
       `);
@@ -151,14 +238,22 @@ export default function Home() {
 		}
 	};
 
-	const downloadPDF = () => {
-		const canvas = canvasRef.current;
+	const downloadPDF = async () => {
+		const canvas = await renderCanvasComposition();
 		if (!canvas) return;
 
+		const mime =
+			downloadSettings.format === "jpeg" ? "image/jpeg" : "image/png";
+		const ext = downloadSettings.format === "jpeg" ? "jpg" : "png";
+		const baseName =
+			downloadSettings.filename.trim() || "doc-master-document";
+
 		const link = document.createElement("a");
-		link.href = canvas.toDataURL("image/png");
-		link.download = "doc-master-document.png";
+		link.href = canvas.toDataURL(mime);
+		link.download = `${baseName}.${ext}`;
 		link.click();
+
+		persistDownloadSettings(downloadSettings);
 	};
 
 	return (
@@ -229,12 +324,22 @@ export default function Home() {
 												<>
 													{images.front && (
 														<div
-															className='absolute'
+															className={`absolute cursor-pointer ${
+																selectedImage ===
+																"front"
+																	? "ring-2 ring-primary"
+																	: ""
+															}`}
 															style={{
 																transform: `translate(${images.front.x}px, ${images.front.y}px) rotate(${images.front.rotation}deg) scale(${images.front.scale})`,
 																transformOrigin:
 																	"top left",
-															}}>
+															}}
+															onClick={() =>
+																setSelectedImage(
+																	"front"
+																)
+															}>
 															<img
 																src={
 																	images.front
@@ -248,12 +353,22 @@ export default function Home() {
 													)}
 													{images.back && (
 														<div
-															className='absolute'
+															className={`absolute cursor-pointer ${
+																selectedImage ===
+																"back"
+																	? "ring-2 ring-secondary"
+																	: ""
+															}`}
 															style={{
 																transform: `translate(${images.back.x}px, ${images.back.y}px) rotate(${images.back.rotation}deg) scale(${images.back.scale})`,
 																transformOrigin:
 																	"top left",
-															}}>
+															}}
+															onClick={() =>
+																setSelectedImage(
+																	"back"
+																)
+															}>
 															<img
 																src={
 																	images.back
@@ -287,6 +402,41 @@ export default function Home() {
 									<ArrowRight className='w-4 h-4 mr-2' />
 									Download
 								</Button>
+							</div>
+
+							{/* Download settings */}
+							<div className='mt-2 flex flex-col sm:flex-row gap-2 sm:items-center text-xs sm:text-sm text-muted-foreground'>
+								<div className='flex-1 flex items-center gap-2'>
+									<label className='whitespace-nowrap'>
+										File name:
+									</label>
+									<input
+										value={downloadSettings.filename}
+										onChange={(e) =>
+											persistDownloadSettings({
+												...downloadSettings,
+												filename: e.target.value,
+											})
+										}
+										className='flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs sm:text-sm'
+									/>
+								</div>
+								<div className='flex items-center gap-2'>
+									<label>Format:</label>
+									<select
+										value={downloadSettings.format}
+										onChange={(e) =>
+											persistDownloadSettings({
+												...downloadSettings,
+												format: e.target
+													.value as DownloadSettings["format"],
+											})
+										}
+										className='rounded-md border border-border bg-background px-2 py-1 text-xs sm:text-sm'>
+										<option value='png'>PNG</option>
+										<option value='jpeg'>JPEG</option>
+									</select>
+								</div>
 							</div>
 						</div>
 
@@ -352,7 +502,7 @@ export default function Home() {
 										{/* Scale */}
 										<div>
 											<label className='text-sm font-medium text-foreground block mb-2'>
-												Scale:{" "}
+												Size:{" "}
 												{(
 													images[selectedImage]!
 														.scale * 100
@@ -412,7 +562,7 @@ export default function Home() {
 										{/* Position X */}
 										<div>
 											<label className='text-sm font-medium text-foreground block mb-2'>
-												Position X:{" "}
+												Left-Right:{" "}
 												{images[selectedImage]!.x}px
 											</label>
 											<input
@@ -435,7 +585,7 @@ export default function Home() {
 										{/* Position Y */}
 										<div>
 											<label className='text-sm font-medium text-foreground block mb-2'>
-												Position Y:{" "}
+												Top-Bottom:{" "}
 												{images[selectedImage]!.y}px
 											</label>
 											<input
@@ -579,33 +729,95 @@ function CropTool({
 	cropImageRef: React.RefObject<HTMLImageElement | null>;
 }) {
 	const [cropArea, setCropArea] = useState({
-		x: 0,
-		y: 0,
-		width: 200,
-		height: 200,
+		x: 40,
+		y: 40,
+		width: 220,
+		height: 220,
 	});
-	const [isDragging, setIsDragging] = useState(false);
+	const [dragMode, setDragMode] = useState<
+		"move" | "resize-nw" | "resize-ne" | "resize-sw" | "resize-se" | null
+	>(null);
+	const dragStartRef = useRef<{
+		x: number;
+		y: number;
+		area: typeof cropArea;
+	} | null>(null);
 
-	const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-		setIsDragging(true);
+	const startDrag = (
+		e: React.MouseEvent<HTMLDivElement>,
+		mode: "move" | "resize-nw" | "resize-ne" | "resize-sw" | "resize-se"
+	) => {
+		e.preventDefault();
+		if (!cropImageRef.current) return;
+		const rect = cropImageRef.current.getBoundingClientRect();
+		dragStartRef.current = {
+			x: e.clientX - rect.left,
+			y: e.clientY - rect.top,
+			area: { ...cropArea },
+		};
+		setDragMode(mode);
 	};
 
 	const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-		if (!isDragging || !cropImageRef.current) return;
+		if (!dragMode || !cropImageRef.current || !dragStartRef.current) return;
 		const rect = cropImageRef.current.getBoundingClientRect();
-		const x = Math.max(
-			0,
-			Math.min(e.clientX - rect.left, rect.width - cropArea.width)
-		);
-		const y = Math.max(
-			0,
-			Math.min(e.clientY - rect.top, rect.height - cropArea.height)
-		);
-		setCropArea((prev) => ({ ...prev, x, y }));
+		const currentX = e.clientX - rect.left;
+		const currentY = e.clientY - rect.top;
+		const dx = currentX - dragStartRef.current.x;
+		const dy = currentY - dragStartRef.current.y;
+		const start = dragStartRef.current.area;
+
+		let next = { ...start };
+
+		if (dragMode === "move") {
+			next.x = Math.min(
+				Math.max(0, start.x + dx),
+				rect.width - start.width
+			);
+			next.y = Math.min(
+				Math.max(0, start.y + dy),
+				rect.height - start.height
+			);
+		} else {
+			if (dragMode.includes("nw")) {
+				const newX = Math.max(0, start.x + dx);
+				const newY = Math.max(0, start.y + dy);
+				next.width = Math.max(40, start.width - (newX - start.x));
+				next.height = Math.max(40, start.height - (newY - start.y));
+				next.x = newX;
+				next.y = newY;
+			}
+			if (dragMode.includes("ne")) {
+				const newY = Math.max(0, start.y + dy);
+				const newW = Math.max(40, start.width + dx);
+				next.width = Math.min(newW, rect.width - start.x);
+				next.height = Math.max(40, start.height - (newY - start.y));
+				next.y = newY;
+			}
+			if (dragMode.includes("sw")) {
+				const newX = Math.max(0, start.x + dx);
+				const newH = Math.max(40, start.height + dy);
+				next.width = Math.max(40, start.width - (newX - start.x));
+				next.height = Math.min(newH, rect.height - start.y);
+				next.x = newX;
+			}
+			if (dragMode.includes("se")) {
+				next.width = Math.min(
+					Math.max(40, start.width + dx),
+					rect.width - start.x
+				);
+				next.height = Math.min(
+					Math.max(40, start.height + dy),
+					rect.height - start.y
+				);
+			}
+		}
+
+		setCropArea(next);
 	};
 
 	const handleMouseUp = () => {
-		setIsDragging(false);
+		setDragMode(null);
 	};
 
 	const executeCrop = () => {
@@ -632,7 +844,6 @@ function CropTool({
 	return (
 		<div className='space-y-4'>
 			<div
-				onMouseDown={handleMouseDown}
 				onMouseMove={handleMouseMove}
 				onMouseUp={handleMouseUp}
 				onMouseLeave={handleMouseUp}
@@ -645,13 +856,31 @@ function CropTool({
 				/>
 				<div
 					className='absolute border-2 border-accent bg-accent/20 cursor-move'
+					onMouseDown={(e) => startDrag(e, "move")}
 					style={{
 						left: cropArea.x,
 						top: cropArea.y,
 						width: cropArea.width,
 						height: cropArea.height,
-					}}
-				/>
+					}}>
+					{/* Resize handles */}
+					<div
+						onMouseDown={(e) => startDrag(e, "resize-nw")}
+						className='absolute w-3 h-3 -left-1.5 -top-1.5 rounded-full bg-accent border border-background cursor-nw-resize'
+					/>
+					<div
+						onMouseDown={(e) => startDrag(e, "resize-ne")}
+						className='absolute w-3 h-3 -right-1.5 -top-1.5 rounded-full bg-accent border border-background cursor-ne-resize'
+					/>
+					<div
+						onMouseDown={(e) => startDrag(e, "resize-sw")}
+						className='absolute w-3 h-3 -left-1.5 -bottom-1.5 rounded-full bg-accent border border-background cursor-sw-resize'
+					/>
+					<div
+						onMouseDown={(e) => startDrag(e, "resize-se")}
+						className='absolute w-3 h-3 -right-1.5 -bottom-1.5 rounded-full bg-accent border border-background cursor-se-resize'
+					/>
+				</div>
 			</div>
 			<div className='flex gap-3'>
 				<Button
