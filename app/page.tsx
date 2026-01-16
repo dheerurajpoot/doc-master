@@ -623,25 +623,25 @@ export default function Home() {
 					<div className='grid lg:grid-cols-3 gap-6'>
 						{/* Preview */}
 						<div className='lg:col-span-2 space-y-4'>
-							<div className='text-center lg:text-left space-y-3'>
-								<div className='inline-flex items-center bg-accent/10 text-accent px-3 py-1.5 rounded-full text-xs font-semibold'>
-									Professional document alignment
+							<div className='text-center lg:text-left space-y-4'>
+								<div className='inline-flex items-center gap-2 bg-linear-to-r from-primary/15 to-secondary/15 text-primary border border-primary/20 px-3 py-1.5 rounded-full text-xs font-semibold'>
+									<span className='inline-block size-1.5 rounded-full bg-primary' />
+									Professional Document Editor
 								</div>
-								<h1 className='text-2xl sm:text-3xl md:text-4xl font-bold text-balance text-foreground leading-tight'>
-									Align & Print Your{" "}
+								<h1 className='text-3xl sm:text-4xl md:text-5xl font-extrabold text-balance text-foreground tracking-tight'>
+									Design, Align & Print{" "}
 									<span className='text-primary'>
 										Documents
-									</span>{" "}
-									with Precision
+									</span>
 								</h1>
-								<p className='text-sm sm:text-base md:text-lg text-muted-foreground max-w-2xl lg:max-w-none text-balance'>
-									Upload front and back, position them on A4,
-									remove backgrounds, crop, and print with one
-									click.
+								<p className='text-sm sm:text-base md:text-lg text-muted-foreground max-w-2xl lg:max-w-3xl text-balance'>
+									In-place cropping, background removal and
+									precise A4 positioning for professional
+									results.
 								</p>
 							</div>
 
-							<div className='bg-card border-2 border-border rounded-xl overflow-hidden'>
+							<div className='bg-card border border-border rounded-2xl overflow-hidden shadow-lg'>
 								<div className='flex items-center justify-center bg-muted p-4'>
 									<div
 										ref={previewWrapRef}
@@ -813,18 +813,18 @@ export default function Home() {
 							</div>
 
 							{/* Action Buttons */}
-							<div className='flex flex-col gap-3'>
+							<div className='flex flex-col gap-4'>
 								<div className='flex flex-col sm:flex-row gap-3'>
 									<Button
 										onClick={handlePrint}
-										className='bg-accent hover:bg-accent/90 w-full sm:w-auto'>
+										className='bg-accent hover:bg-accent/90 w-full sm:w-auto shadow-md'>
 										<Download className='w-4 h-4 mr-2' />
 										Print
 									</Button>
 									<Button
 										onClick={downloadPDF}
 										variant='outline'
-										className='w-full sm:w-auto bg-transparent'>
+										className='w-full sm:w-auto bg-transparent shadow-sm'>
 										<ArrowRight className='w-4 h-4 mr-2' />
 										Download
 									</Button>
@@ -870,11 +870,11 @@ export default function Home() {
 						{/* Controls */}
 						<div className='space-y-4 lg:space-y-6'>
 							{/* Image Selection */}
-							<div className='bg-card border border-border rounded-xl p-4 sm:p-6'>
+							<div className='bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-md'>
 								<h3 className='font-semibold mb-3 text-foreground'>
 									Select Image
 								</h3>
-								<div className='grid grid-cols-2 gap-2 sm:gap-3'>
+								<div className='inline-flex w-full gap-0 rounded-lg border border-border overflow-hidden'>
 									{(["front", "back"] as const).map(
 										(side) => (
 											<button
@@ -882,10 +882,10 @@ export default function Home() {
 												onClick={() =>
 													setSelectedImage(side)
 												}
-												className={`py-2.5 px-3 rounded-lg font-medium transition-all text-sm sm:text-base ${
+												className={`flex-1 py-2.5 px-3 font-medium transition-all text-sm sm:text-base ${
 													selectedImage === side
 														? "bg-primary text-primary-foreground"
-														: "bg-muted text-foreground hover:bg-muted-foreground/20"
+														: "bg-background text-foreground hover:bg-muted"
 												}`}>
 												{side.charAt(0).toUpperCase() +
 													side.slice(1)}
@@ -896,7 +896,7 @@ export default function Home() {
 							</div>
 
 							{/* Upload */}
-							<div className='bg-card border border-border rounded-xl p-4 sm:p-6'>
+							<div className='bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-md'>
 								<h3 className='font-semibold mb-4 text-foreground'>
 									Upload
 								</h3>
@@ -912,7 +912,7 @@ export default function Home() {
 										fileInputRef.current?.click()
 									}
 									variant='outline'
-									className='w-full'>
+									className='w-full shadow-sm'>
 									<Upload className='w-4 h-4 mr-2' />
 									Choose Image
 								</Button>
@@ -921,7 +921,7 @@ export default function Home() {
 							{/* Adjustments */}
 							{images[selectedImage] && (
 								<>
-									<div className='bg-card border border-border rounded-xl p-4 sm:p-6 space-y-4'>
+									<div className='bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-5 shadow-md'>
 										<h3 className='font-semibold text-foreground'>
 											Adjustments
 										</h3>
@@ -1071,7 +1071,7 @@ export default function Home() {
 					</div>
 
 					{/* Feature Cards */}
-					<div className='grid md:grid-cols-3 gap-6 md:gap-8 mt-10 md:mt-14'>
+					<div className='grid md:grid-cols-3 gap-6 md:gap-8 mt-12 md:mt-16'>
 						{[
 							{
 								icon: "✨",
@@ -1094,8 +1094,8 @@ export default function Home() {
 						].map((feature, idx) => (
 							<div
 								key={idx}
-								className='bg-card border border-border rounded-xl p-6 md:p-8 hover:border-primary/50 transition-colors'>
-								<div className='bg-primary/10 w-12 h-12 rounded-lg flex items-center justify-center mb-4 text-2xl'>
+								className='bg-card border border-border rounded-2xl p-6 md:p-8 hover:border-primary/50 transition-colors shadow-md'>
+								<div className='bg-primary/10 w-12 h-12 rounded-xl flex items-center justify-center mb-4 text-2xl'>
 									{feature.icon}
 								</div>
 								<h3 className='text-lg font-semibold text-foreground mb-2'>

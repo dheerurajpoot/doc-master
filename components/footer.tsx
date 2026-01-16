@@ -34,6 +34,7 @@ export default function Footer() {
 									by{" "}
 									<Link
 										href='https://dheeru.org'
+										target='_blank'
 										className='text-orange-400 hover:text-orange-500 transition-colors duration-200'>
 										Dheeru Rajpoot
 									</Link>
