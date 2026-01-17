@@ -72,10 +72,6 @@ function ImageWithCrop({
 		| "resize-ne"
 		| "resize-sw"
 		| "resize-se"
-		| "resize-n"
-		| "resize-s"
-		| "resize-w"
-		| "resize-e"
 		| null
 	>(null);
 	const dragStartRef = useRef<{
@@ -107,10 +103,7 @@ function ImageWithCrop({
 			| "resize-ne"
 			| "resize-sw"
 			| "resize-se"
-			| "resize-n"
-			| "resize-s"
-			| "resize-w"
-			| "resize-e"
+		// corner-only
 	) => {
 		e.preventDefault();
 		e.stopPropagation();
@@ -192,24 +185,7 @@ function ImageWithCrop({
 					rect.height - start.y
 				);
 			}
-			if (dragMode === "resize-n") {
-				const newY = Math.max(0, start.y + dy);
-				next.height = Math.max(40, start.height - (newY - start.y));
-				next.y = newY;
-			}
-			if (dragMode === "resize-s") {
-				const newH = Math.max(40, start.height + dy);
-				next.height = Math.min(newH, rect.height - start.y);
-			}
-			if (dragMode === "resize-w") {
-				const newX = Math.max(0, start.x + dx);
-				next.width = Math.max(40, start.width - (newX - start.x));
-				next.x = newX;
-			}
-			if (dragMode === "resize-e") {
-				const newW = Math.max(40, start.width + dx);
-				next.width = Math.min(newW, rect.width - start.x);
-			}
+			// corner-only resizing handled above
 		}
 
 		onCropAreaChange(next);
@@ -331,23 +307,7 @@ function ImageWithCrop({
 								onMouseDown={(e) => startDrag(e, "resize-se")}
 								className='absolute w-3.5 h-3.5 -right-1.5 -bottom-1.5 rounded-full bg-accent border-2 border-background cursor-se-resize shadow-sm transition-transform hover:scale-110'
 							/>
-							{/* Edge handles */}
-							<div
-								onMouseDown={(e) => startDrag(e, "resize-n")}
-								className='absolute h-2 w-6 -top-1 left-1/2 -translate-x-1/2 rounded bg-accent/80 cursor-n-resize'
-							/>
-							<div
-								onMouseDown={(e) => startDrag(e, "resize-s")}
-								className='absolute h-2 w-6 -bottom-1 left-1/2 -translate-x-1/2 rounded bg-accent/80 cursor-s-resize'
-							/>
-							<div
-								onMouseDown={(e) => startDrag(e, "resize-w")}
-								className='absolute w-2 h-6 -left-1 top-1/2 -translate-y-1/2 rounded bg-accent/80 cursor-w-resize'
-							/>
-							<div
-								onMouseDown={(e) => startDrag(e, "resize-e")}
-								className='absolute w-2 h-6 -right-1 top-1/2 -translate-y-1/2 rounded bg-accent/80 cursor-e-resize'
-							/>
+							{/* Corner pointers only for simpler UX */}
 						</div>
 						{/* Crop controls */}
 						<div className='absolute -bottom-12 left-0 right-0 flex gap-2 justify-center bg-background/80 backdrop-blur-sm rounded-md p-2 border border-border shadow-sm'>
