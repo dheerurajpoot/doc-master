@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FileText, Home, MessageSquare, Info, Menu, X } from "lucide-react";
 import { useState } from "react";
+import Image from "next/image";
 
 const mainLinks = [
 	{ href: "/", label: "Home" },
@@ -21,12 +22,12 @@ export function TopNav() {
 		<nav className='fixed top-0 left-0 right-0 bg-background/95 backdrop-blur border-b border-border z-40'>
 			<div className='md:max-w-7xl mx-auto px-4 py-3 flex items-center justify-between'>
 				<Link href='/' className='flex items-center gap-3'>
-					<div className='bg-primary rounded-lg p-2'>
-						<FileText className='w-6 h-6 text-primary-foreground' />
-					</div>
-					<span className='text-xl font-bold text-foreground'>
-						Doc Master
-					</span>
+					<Image
+						src='/docmaster.png'
+						alt='Doc Master'
+						width={132}
+						height={132}
+					/>
 				</Link>
 
 				<div className='hidden md:flex items-center gap-8'>

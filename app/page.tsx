@@ -66,7 +66,17 @@ function ImageWithCrop({
 	imageRef: (el: HTMLImageElement | null) => void;
 }) {
 	const [dragMode, setDragMode] = useState<
-		"move" | "resize-nw" | "resize-ne" | "resize-sw" | "resize-se" | null
+		| "move"
+		| "create"
+		| "resize-nw"
+		| "resize-ne"
+		| "resize-sw"
+		| "resize-se"
+		| "resize-n"
+		| "resize-s"
+		| "resize-w"
+		| "resize-e"
+		| null
 	>(null);
 	const dragStartRef = useRef<{
 		x: number;
@@ -74,6 +84,7 @@ function ImageWithCrop({
 		area: typeof cropArea;
 	} | null>(null);
 	const imgRef = useRef<HTMLImageElement | null>(null);
+	const overlayRef = useRef<HTMLDivElement | null>(null);
 
 	useEffect(() => {
 		if (isCropping && imgRef.current && !cropArea) {
@@ -89,12 +100,23 @@ function ImageWithCrop({
 
 	const startDrag = (
 		e: React.MouseEvent<HTMLDivElement>,
-		mode: "move" | "resize-nw" | "resize-ne" | "resize-sw" | "resize-se"
+		mode:
+			| "move"
+			| "create"
+			| "resize-nw"
+			| "resize-ne"
+			| "resize-sw"
+			| "resize-se"
+			| "resize-n"
+			| "resize-s"
+			| "resize-w"
+			| "resize-e"
 	) => {
 		e.preventDefault();
 		e.stopPropagation();
-		if (!imgRef.current || !cropArea) return;
-		const rect = imgRef.current.getBoundingClientRect();
+		const base = overlayRef.current ?? imgRef.current;
+		if (!base || !cropArea) return;
+		const rect = base.getBoundingClientRect();
 		dragStartRef.current = {
 			x: e.clientX - rect.left,
 			y: e.clientY - rect.top,
@@ -104,11 +126,11 @@ function ImageWithCrop({
 	};
 
 	const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-		if (!dragMode || !imgRef.current || !dragStartRef.current || !cropArea)
-			return;
+		const base = overlayRef.current ?? imgRef.current;
+		if (!dragMode || !base || !dragStartRef.current || !cropArea) return;
 		e.preventDefault();
 		e.stopPropagation();
-		const rect = imgRef.current.getBoundingClientRect();
+		const rect = base.getBoundingClientRect();
 		const currentX = e.clientX - rect.left;
 		const currentY = e.clientY - rect.top;
 		const dx = currentX - dragStartRef.current.x;
@@ -126,6 +148,17 @@ function ImageWithCrop({
 				Math.max(0, start.y + dy),
 				rect.height - start.height
 			);
+		} else if (dragMode === "create") {
+			const originX = dragStartRef.current.x;
+			const originY = dragStartRef.current.y;
+			const rawX = Math.min(originX, currentX);
+			const rawY = Math.min(originY, currentY);
+			const rawW = Math.abs(currentX - originX);
+			const rawH = Math.abs(currentY - originY);
+			next.x = Math.max(0, rawX);
+			next.y = Math.max(0, rawY);
+			next.width = Math.max(40, Math.min(rawW, rect.width - next.x));
+			next.height = Math.max(40, Math.min(rawH, rect.height - next.y));
 		} else {
 			if (dragMode.includes("nw")) {
 				const newX = Math.max(0, start.x + dx);
@@ -159,6 +192,24 @@ function ImageWithCrop({
 					rect.height - start.y
 				);
 			}
+			if (dragMode === "resize-n") {
+				const newY = Math.max(0, start.y + dy);
+				next.height = Math.max(40, start.height - (newY - start.y));
+				next.y = newY;
+			}
+			if (dragMode === "resize-s") {
+				const newH = Math.max(40, start.height + dy);
+				next.height = Math.min(newH, rect.height - start.y);
+			}
+			if (dragMode === "resize-w") {
+				const newX = Math.max(0, start.x + dx);
+				next.width = Math.max(40, start.width - (newX - start.x));
+				next.x = newX;
+			}
+			if (dragMode === "resize-e") {
+				const newW = Math.max(40, start.width + dx);
+				next.width = Math.min(newW, rect.width - start.x);
+			}
 		}
 
 		onCropAreaChange(next);
@@ -166,6 +217,24 @@ function ImageWithCrop({
 
 	const handleMouseUp = () => {
 		setDragMode(null);
+	};
+	// Start a new selection by dragging on overlay outside current crop box
+	const handleOverlayMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+		const base = overlayRef.current ?? imgRef.current;
+		if (!base) return;
+		const rect = base.getBoundingClientRect();
+		const x = e.clientX - rect.left;
+		const y = e.clientY - rect.top;
+		const insideCurrent =
+			cropArea &&
+			x >= cropArea.x &&
+			x <= cropArea.x + cropArea.width &&
+			y >= cropArea.y &&
+			y <= cropArea.y + cropArea.height;
+		if (insideCurrent) return;
+		dragStartRef.current = { x, y, area: { x, y, width: 1, height: 1 } };
+		setDragMode("create");
+		onCropAreaChange({ x, y, width: 1, height: 1 });
 	};
 
 	const borderColor =
@@ -204,7 +273,9 @@ function ImageWithCrop({
 				/>
 				{isCropping && cropArea && (
 					<div
-						className='absolute inset-0'
+						className='absolute inset-0 select-none'
+						ref={overlayRef}
+						onMouseDown={handleOverlayMouseDown}
 						onMouseMove={handleMouseMove}
 						onMouseUp={handleMouseUp}
 						onMouseLeave={handleMouseUp}>
@@ -259,6 +330,23 @@ function ImageWithCrop({
 							<div
 								onMouseDown={(e) => startDrag(e, "resize-se")}
 								className='absolute w-3.5 h-3.5 -right-1.5 -bottom-1.5 rounded-full bg-accent border-2 border-background cursor-se-resize shadow-sm transition-transform hover:scale-110'
+							/>
+							{/* Edge handles */}
+							<div
+								onMouseDown={(e) => startDrag(e, "resize-n")}
+								className='absolute h-2 w-6 -top-1 left-1/2 -translate-x-1/2 rounded bg-accent/80 cursor-n-resize'
+							/>
+							<div
+								onMouseDown={(e) => startDrag(e, "resize-s")}
+								className='absolute h-2 w-6 -bottom-1 left-1/2 -translate-x-1/2 rounded bg-accent/80 cursor-s-resize'
+							/>
+							<div
+								onMouseDown={(e) => startDrag(e, "resize-w")}
+								className='absolute w-2 h-6 -left-1 top-1/2 -translate-y-1/2 rounded bg-accent/80 cursor-w-resize'
+							/>
+							<div
+								onMouseDown={(e) => startDrag(e, "resize-e")}
+								className='absolute w-2 h-6 -right-1 top-1/2 -translate-y-1/2 rounded bg-accent/80 cursor-e-resize'
 							/>
 						</div>
 						{/* Crop controls */}
@@ -335,6 +423,15 @@ export default function Home() {
 		ro.observe(el);
 		return () => ro.disconnect();
 	}, [PREVIEW_W]);
+
+	// Preload IMG.LY assets for faster first run
+	// useEffect(() => {
+	// 	const config: ImglyConfig = {
+	// 		device: "gpu",
+	// 		output: { format: "image/png", type: "foreground", quality: 0.9 },
+	// 	};
+	// 	preloadImgly(config).catch(() => {});
+	// }, []);
 
 	useEffect(() => {
 		if (typeof window === "undefined") return;
@@ -462,41 +559,44 @@ export default function Home() {
 		}
 	};
 
-	const removeBackground = async () => {
-		if (!images[selectedImage]) return;
+	// const onRemoveBackground = async () => {
+	// 	if (!images[selectedImage]) return;
 
-		setBgRemovalLoading(true);
-		try {
-			const response = await fetch("/api/remove-bg", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ image: images[selectedImage]!.src }),
-			});
-
-			if (response.ok) {
-				const { data } = await response.json();
-				updateImage({ src: data });
-			}
-		} catch (error) {
-			console.error("Background removal failed:", error);
-		} finally {
-			setBgRemovalLoading(false);
-		}
-	};
+	// 	setBgRemovalLoading(true);
+	// 	try {
+	// 		const blob = await imglyRemoveBackground(
+	// 			images[selectedImage]!.src,
+	// 			{
+	// 				device: "gpu",
+	// 				output: {
+	// 					format: "image/png",
+	// 					type: "foreground",
+	// 					quality: 0.9,
+	// 				},
+	// 			} as ImglyConfig
+	// 		);
+	// 		const reader = new FileReader();
+	// 		reader.onloadend = () => {
+	// 			const dataUrl = reader.result as string;
+	// 			updateImage({ src: dataUrl });
+	// 		};
+	// 		reader.readAsDataURL(blob);
+	// 	} catch (error) {
+	// 		console.error("Background removal failed:", error);
+	// 	} finally {
+	// 		setBgRemovalLoading(false);
+	// 	}
+	// };
 
 	const startCrop = (side: "front" | "back") => {
 		setCroppingImage(side);
 		const img = imageRefs.current[side];
 		if (img && !cropAreas[side]) {
 			// Initialize crop area to cover full displayed image
+			const rect = img.getBoundingClientRect();
 			setCropAreas({
 				...cropAreas,
-				[side]: {
-					x: 0,
-					y: 0,
-					width: img.width,
-					height: img.height,
-				},
+				[side]: { x: 0, y: 0, width: rect.width, height: rect.height },
 			});
 		}
 	};
@@ -506,9 +606,10 @@ export default function Home() {
 		const crop = cropAreas[side];
 		if (!img || !crop || !images[side]) return;
 
-		// Convert displayed coordinates to natural image coordinates
-		const scaleX = img.naturalWidth / img.width;
-		const scaleY = img.naturalHeight / img.height;
+		// Convert displayed coordinates (affected by transforms) to natural image coordinates
+		const rect = img.getBoundingClientRect();
+		const scaleX = img.naturalWidth / rect.width;
+		const scaleY = img.naturalHeight / rect.height;
 
 		const naturalCrop = {
 			x: crop.x * scaleX,
@@ -1039,7 +1140,7 @@ export default function Home() {
 											AI Tools
 										</h3>
 										<Button
-											onClick={removeBackground}
+											// onClick={onRemoveBackground}
 											disabled={bgRemovalLoading}
 											className='w-full bg-accent hover:bg-accent/90'>
 											<Wand2 className='w-4 h-4 mr-2' />
