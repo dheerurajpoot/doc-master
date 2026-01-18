@@ -5,7 +5,7 @@ import { CheckCircle } from "lucide-react";
 
 export default function About() {
 	return (
-		<div className='min-h-screen bg-background flex flex-col md:pt-20'>
+		<div className='min-h-screen bg-background flex flex-col pt-12'>
 			<TopNav />
 
 			<main className='flex-1 pb-20 md:pb-0 px-4 md:px-6 pt-8 md:pt-16'>

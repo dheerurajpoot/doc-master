@@ -2,8 +2,8 @@
 
 export default function Terms() {
 	return (
-		<div className='min-h-screen bg-background flex flex-col md:pt-20'>
-			<main className='flex-1 pb-20 md:pb-0 px-4 md:px-6 pt-8 md:pt-16'>
+		<div className='min-h-screen bg-background flex flex-col pt-12'>
+			<main className='flex-1 pb-10 px-4 md:px-6 pt-8 md:pt-16'>
 				<div className='max-w-3xl mx-auto'>
 					<h1 className='text-4xl md:text-5xl font-bold mb-8 text-foreground'>
 						Terms of Service

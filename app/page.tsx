@@ -99,30 +99,6 @@ function ImageWithCrop({
 		}
 	}, [isCropping, cropArea, onCropAreaChange]);
 
-	const startDrag = (
-		e: React.MouseEvent<HTMLDivElement>,
-		mode:
-			| "move"
-			| "create"
-			| "resize-nw"
-			| "resize-ne"
-			| "resize-sw"
-			| "resize-se",
-		// corner-only
-	) => {
-		e.preventDefault();
-		e.stopPropagation();
-		const base = overlayRef.current ?? imgRef.current;
-		if (!base || !cropArea) return;
-		const rect = base.getBoundingClientRect();
-		dragStartRef.current = {
-			x: e.clientX - rect.left,
-			y: e.clientY - rect.top,
-			area: { ...cropArea },
-		};
-		setDragMode(mode);
-	};
-
 	const borderColor =
 		side === "front" ? "border-primary" : "border-secondary";
 	const ringColor = side === "front" ? "ring-primary" : "ring-secondary";
@@ -311,15 +287,6 @@ export default function Home() {
 		return () => ro.disconnect();
 	}, [PREVIEW_W]);
 
-	// Preload IMG.LY assets for faster first run
-	// useEffect(() => {
-	// 	const config: ImglyConfig = {
-	// 		device: "gpu",
-	// 		output: { format: "image/png", type: "foreground", quality: 0.9 },
-	// 	};
-	// 	preloadImgly(config).catch(() => {});
-	// }, []);
-
 	useEffect(() => {
 		if (typeof window === "undefined") return;
 		try {
@@ -446,34 +413,12 @@ export default function Home() {
 		}
 	};
 
-	// const onRemoveBackground = async () => {
-	// 	if (!images[selectedImage]) return;
-
-	// 	setBgRemovalLoading(true);
-	// 	try {
-	// 		const blob = await imglyRemoveBackground(
-	// 			images[selectedImage]!.src,
-	// 			{
-	// 				device: "gpu",
-	// 				output: {
-	// 					format: "image/png",
-	// 					type: "foreground",
-	// 					quality: 0.9,
-	// 				},
-	// 			} as ImglyConfig
-	// 		);
-	// 		const reader = new FileReader();
-	// 		reader.onloadend = () => {
-	// 			const dataUrl = reader.result as string;
-	// 			updateImage({ src: dataUrl });
-	// 		};
-	// 		reader.readAsDataURL(blob);
-	// 	} catch (error) {
-	// 		console.error("Background removal failed:", error);
-	// 	} finally {
-	// 		setBgRemovalLoading(false);
-	// 	}
-	// };
+	const onRemoveBackground = async () => {
+		if (!images[selectedImage]) return;
+		setBgRemovalLoading(true);
+		alert("Background removal is not available yet. Coming soon...");
+		setBgRemovalLoading(false);
+	};
 
 	const startCrop = (side: "front" | "back") => {
 		setCroppingImage(side);
@@ -1027,7 +972,7 @@ export default function Home() {
 											AI Tools
 										</h3>
 										<Button
-											// onClick={onRemoveBackground}
+											onClick={onRemoveBackground}
 											disabled={bgRemovalLoading}
 											className='w-full bg-accent hover:bg-accent/90'>
 											<Wand2 className='w-4 h-4 mr-2' />

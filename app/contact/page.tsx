@@ -21,8 +21,8 @@ export default function Contact() {
 	};
 
 	return (
-		<div className='min-h-screen bg-background flex flex-col md:pt-20'>
-			<main className='flex-1 pb-20 md:pb-0 px-4 md:px-6 pt-8 md:pt-16'>
+		<div className='min-h-[calc(100vh-64px)] bg-background flex flex-col pt-12'>
+			<main className='flex-1 pb-10 px-4 md:px-6 pt-8 md:pt-16'>
 				<div className='max-w-3xl mx-auto'>
 					<h1 className='text-4xl md:text-5xl font-bold mb-4 text-foreground'>
 						Contact Us
@@ -36,7 +36,7 @@ export default function Contact() {
 							{
 								icon: Mail,
 								title: "Email",
-								content: "support@docmaster.app",
+								content: "contact@dheeru.org",
 							},
 							{
 								icon: Phone,
@@ -68,77 +68,6 @@ export default function Contact() {
 								</div>
 							);
 						})}
-					</div>
-
-					<div className='bg-card border border-border rounded-xl p-8 md:p-10'>
-						<h2 className='text-2xl font-semibold text-foreground mb-6'>
-							Send us a Message
-						</h2>
-						{submitted ? (
-							<div className='bg-primary/10 border border-primary text-primary p-4 rounded-lg'>
-								Thank you for your message! We'll get back to
-								you soon.
-							</div>
-						) : (
-							<form onSubmit={handleSubmit} className='space-y-6'>
-								<div>
-									<label className='block text-sm font-medium text-foreground mb-2'>
-										Name
-									</label>
-									<input
-										type='text'
-										required
-										value={formData.name}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												name: e.target.value,
-											})
-										}
-										className='w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary'
-									/>
-								</div>
-								<div>
-									<label className='block text-sm font-medium text-foreground mb-2'>
-										Email
-									</label>
-									<input
-										type='email'
-										required
-										value={formData.email}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												email: e.target.value,
-											})
-										}
-										className='w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary'
-									/>
-								</div>
-								<div>
-									<label className='block text-sm font-medium text-foreground mb-2'>
-										Message
-									</label>
-									<textarea
-										required
-										rows={5}
-										value={formData.message}
-										onChange={(e) =>
-											setFormData({
-												...formData,
-												message: e.target.value,
-											})
-										}
-										className='w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none'
-									/>
-								</div>
-								<Button
-									type='submit'
-									className='w-full bg-primary hover:bg-primary/90'>
-									Send Message
-								</Button>
-							</form>
-						)}
 					</div>
 				</div>
 			</main>
