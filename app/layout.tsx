@@ -2,6 +2,7 @@ import type React from "react";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "react-image-crop/dist/ReactCrop.css";
 import { TopNav, BottomNav } from "@/components/navigation";
 import Footer from "@/components/footer";
 import Head from "next/head";

@@ -4,6 +4,7 @@ import type React from "react";
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, Trash2, Download, Wand2, ArrowRight } from "lucide-react";
+import ReactCrop, { type PixelCrop, type Crop } from "react-image-crop";
 
 interface ImageState {
 	front?: {
@@ -81,6 +82,10 @@ function ImageWithCrop({
 	} | null>(null);
 	const imgRef = useRef<HTMLImageElement | null>(null);
 	const overlayRef = useRef<HTMLDivElement | null>(null);
+	const [cropPercent, setCropPercent] = useState<Crop | undefined>(undefined);
+	const [completedCrop, setCompletedCrop] = useState<
+		{ x: number; y: number; width: number; height: number } | undefined
+	>(undefined);
 
 	useEffect(() => {
 		if (isCropping && imgRef.current && !cropArea) {
@@ -102,7 +107,7 @@ function ImageWithCrop({
 			| "resize-nw"
 			| "resize-ne"
 			| "resize-sw"
-			| "resize-se"
+			| "resize-se",
 		// corner-only
 	) => {
 		e.preventDefault();
@@ -116,101 +121,6 @@ function ImageWithCrop({
 			area: { ...cropArea },
 		};
 		setDragMode(mode);
-	};
-
-	const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-		const base = overlayRef.current ?? imgRef.current;
-		if (!dragMode || !base || !dragStartRef.current || !cropArea) return;
-		e.preventDefault();
-		e.stopPropagation();
-		const rect = base.getBoundingClientRect();
-		const currentX = e.clientX - rect.left;
-		const currentY = e.clientY - rect.top;
-		const dx = currentX - dragStartRef.current.x;
-		const dy = currentY - dragStartRef.current.y;
-		const start = dragStartRef.current.area!;
-
-		const next = { ...start };
-
-		if (dragMode === "move") {
-			next.x = Math.min(
-				Math.max(0, start.x + dx),
-				rect.width - start.width
-			);
-			next.y = Math.min(
-				Math.max(0, start.y + dy),
-				rect.height - start.height
-			);
-		} else if (dragMode === "create") {
-			const originX = dragStartRef.current.x;
-			const originY = dragStartRef.current.y;
-			const rawX = Math.min(originX, currentX);
-			const rawY = Math.min(originY, currentY);
-			const rawW = Math.abs(currentX - originX);
-			const rawH = Math.abs(currentY - originY);
-			next.x = Math.max(0, rawX);
-			next.y = Math.max(0, rawY);
-			next.width = Math.max(40, Math.min(rawW, rect.width - next.x));
-			next.height = Math.max(40, Math.min(rawH, rect.height - next.y));
-		} else {
-			if (dragMode.includes("nw")) {
-				const newX = Math.max(0, start.x + dx);
-				const newY = Math.max(0, start.y + dy);
-				next.width = Math.max(40, start.width - (newX - start.x));
-				next.height = Math.max(40, start.height - (newY - start.y));
-				next.x = newX;
-				next.y = newY;
-			}
-			if (dragMode.includes("ne")) {
-				const newY = Math.max(0, start.y + dy);
-				const newW = Math.max(40, start.width + dx);
-				next.width = Math.min(newW, rect.width - start.x);
-				next.height = Math.max(40, start.height - (newY - start.y));
-				next.y = newY;
-			}
-			if (dragMode.includes("sw")) {
-				const newX = Math.max(0, start.x + dx);
-				const newH = Math.max(40, start.height + dy);
-				next.width = Math.max(40, start.width - (newX - start.x));
-				next.height = Math.min(newH, rect.height - start.y);
-				next.x = newX;
-			}
-			if (dragMode.includes("se")) {
-				next.width = Math.min(
-					Math.max(40, start.width + dx),
-					rect.width - start.x
-				);
-				next.height = Math.min(
-					Math.max(40, start.height + dy),
-					rect.height - start.y
-				);
-			}
-			// corner-only resizing handled above
-		}
-
-		onCropAreaChange(next);
-	};
-
-	const handleMouseUp = () => {
-		setDragMode(null);
-	};
-	// Start a new selection by dragging on overlay outside current crop box
-	const handleOverlayMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-		const base = overlayRef.current ?? imgRef.current;
-		if (!base) return;
-		const rect = base.getBoundingClientRect();
-		const x = e.clientX - rect.left;
-		const y = e.clientY - rect.top;
-		const insideCurrent =
-			cropArea &&
-			x >= cropArea.x &&
-			x <= cropArea.x + cropArea.width &&
-			y >= cropArea.y &&
-			y <= cropArea.y + cropArea.height;
-		if (insideCurrent) return;
-		dragStartRef.current = { x, y, area: { x, y, width: 1, height: 1 } };
-		setDragMode("create");
-		onCropAreaChange({ x, y, width: 1, height: 1 });
 	};
 
 	const borderColor =
@@ -237,80 +147,97 @@ function ImageWithCrop({
 				}
 			}}>
 			<div className='relative'>
-				<img
-					ref={(el) => {
-						imgRef.current = el;
-						imageRef(el);
-					}}
-					src={src || "/placeholder.svg"}
-					alt={side}
-					className={`max-w-xs h-auto ${borderColor} rounded`}
-					style={{ borderWidth: "2px" }}
-				/>
-				{isCropping && cropArea && (
-					<div
-						className='absolute inset-0 select-none'
-						ref={overlayRef}
-						onMouseDown={handleOverlayMouseDown}
-						onMouseMove={handleMouseMove}
-						onMouseUp={handleMouseUp}
-						onMouseLeave={handleMouseUp}>
-						{/* Dark overlay outside crop area */}
-						<svg className='absolute inset-0 w-full h-full pointer-events-none'>
-							<defs>
-								<mask id={`crop-mask-${side}`}>
-									<rect
-										width='100%'
-										height='100%'
-										fill='white'
-									/>
-									<rect
-										x={cropArea.x}
-										y={cropArea.y}
-										width={cropArea.width}
-										height={cropArea.height}
-										fill='black'
-									/>
-								</mask>
-							</defs>
-							<rect
-								width='100%'
-								height='100%'
-								fill='rgba(0,0,0,0.5)'
-								mask={`url(#crop-mask-${side})`}
+				{!isCropping && (
+					<img
+						ref={(el) => {
+							imgRef.current = el;
+							imageRef(el);
+						}}
+						src={src || "/placeholder.svg"}
+						alt={side}
+						className={`max-w-xs h-auto ${borderColor} rounded`}
+						style={{ borderWidth: "2px" }}
+					/>
+				)}
+				{isCropping && (
+					<div className='relative'>
+						<ReactCrop
+							crop={cropPercent}
+							onChange={(_, percentCrop) => {
+								setCropPercent(percentCrop);
+								const imgEl = imgRef.current;
+								if (!imgEl || !percentCrop) return;
+								onCropAreaChange({
+									x: Math.round(
+										((percentCrop.x ?? 0) / 100) *
+											imgEl.width,
+									),
+									y: Math.round(
+										((percentCrop.y ?? 0) / 100) *
+											imgEl.height,
+									),
+									width: Math.round(
+										((percentCrop.width ?? 0) / 100) *
+											imgEl.width,
+									),
+									height: Math.round(
+										((percentCrop.height ?? 0) / 100) *
+											imgEl.height,
+									),
+								});
+							}}
+							onComplete={(c) => {
+								setCompletedCrop({
+									x: Math.round(c.x),
+									y: Math.round(c.y),
+									width: Math.round(c.width),
+									height: Math.round(c.height),
+								});
+								onCropAreaChange({
+									x: Math.round(c.x),
+									y: Math.round(c.y),
+									width: Math.round(c.width),
+									height: Math.round(c.height),
+								});
+							}}
+							keepSelection
+							minWidth={40}
+							minHeight={40}>
+							<img
+								ref={(el) => {
+									imgRef.current = el;
+									imageRef(el);
+								}}
+								src={src || "/placeholder.svg"}
+								alt={side}
+								className={`max-w-xs h-auto ${borderColor} rounded`}
+								style={{ borderWidth: "2px" }}
+								onLoad={(e) => {
+									const el =
+										e.currentTarget as HTMLImageElement;
+									const w = el.width;
+									const h = el.height;
+									if (cropArea) {
+										setCropPercent({
+											unit: "%",
+											x: (cropArea.x / w) * 100,
+											y: (cropArea.y / h) * 100,
+											width: (cropArea.width / w) * 100,
+											height: (cropArea.height / h) * 100,
+										});
+									} else {
+										setCropPercent({
+											unit: "%",
+											x: 5,
+											y: 5,
+											width: 90,
+											height: 90,
+										});
+									}
+								}}
 							/>
-						</svg>
-						{/* Crop box */}
-						<div
-							className='absolute border-2 border-accent bg-transparent cursor-move'
-							onMouseDown={(e) => startDrag(e, "move")}
-							style={{
-								left: cropArea.x,
-								top: cropArea.y,
-								width: cropArea.width,
-								height: cropArea.height,
-							}}>
-							{/* Resize handles */}
-							<div
-								onMouseDown={(e) => startDrag(e, "resize-nw")}
-								className='absolute w-3.5 h-3.5 -left-1.5 -top-1.5 rounded-full bg-accent border-2 border-background cursor-nw-resize shadow-sm transition-transform hover:scale-110'
-							/>
-							<div
-								onMouseDown={(e) => startDrag(e, "resize-ne")}
-								className='absolute w-3.5 h-3.5 -right-1.5 -top-1.5 rounded-full bg-accent border-2 border-background cursor-ne-resize shadow-sm transition-transform hover:scale-110'
-							/>
-							<div
-								onMouseDown={(e) => startDrag(e, "resize-sw")}
-								className='absolute w-3.5 h-3.5 -left-1.5 -bottom-1.5 rounded-full bg-accent border-2 border-background cursor-sw-resize shadow-sm transition-transform hover:scale-110'
-							/>
-							<div
-								onMouseDown={(e) => startDrag(e, "resize-se")}
-								className='absolute w-3.5 h-3.5 -right-1.5 -bottom-1.5 rounded-full bg-accent border-2 border-background cursor-se-resize shadow-sm transition-transform hover:scale-110'
-							/>
-							{/* Corner pointers only for simpler UX */}
-						</div>
-						{/* Crop controls */}
-						<div className='absolute -bottom-12 left-0 right-0 flex gap-2 justify-center bg-background/80 backdrop-blur-sm rounded-md p-2 border border-border shadow-sm'>
+						</ReactCrop>
+						<div className='mt-3 flex gap-2 justify-center'>
 							<Button
 								onClick={(e) => {
 									e.stopPropagation();
@@ -341,11 +268,11 @@ function ImageWithCrop({
 export default function Home() {
 	const [images, setImages] = useState<ImageState>({});
 	const [selectedImage, setSelectedImage] = useState<"front" | "back">(
-		"front"
+		"front",
 	);
 	const [bgRemovalLoading, setBgRemovalLoading] = useState(false);
 	const [croppingImage, setCroppingImage] = useState<"front" | "back" | null>(
-		null
+		null,
 	);
 	const [cropAreas, setCropAreas] = useState<{
 		front?: { x: number; y: number; width: number; height: number };
@@ -365,7 +292,7 @@ export default function Home() {
 	});
 
 	// A4 dimensions in pixels (at 96 DPI)
-	const A4_WIDTH = 616;
+	const A4_WIDTH = 716;
 	const A4_HEIGHT = 956;
 	const PREVIEW_W = A4_WIDTH / 2;
 	const PREVIEW_H = A4_HEIGHT / 2;
@@ -397,7 +324,7 @@ export default function Home() {
 		if (typeof window === "undefined") return;
 		try {
 			const stored = window.localStorage.getItem(
-				"doc-master-download-settings"
+				"doc-master-download-settings",
 			);
 			if (stored) {
 				const parsed = JSON.parse(stored) as DownloadSettings;
@@ -420,7 +347,7 @@ export default function Home() {
 		try {
 			window.localStorage.setItem(
 				"doc-master-download-settings",
-				JSON.stringify(next)
+				JSON.stringify(next),
 			);
 		} catch {
 			// ignore
@@ -450,7 +377,7 @@ export default function Home() {
 		ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
 
 		const drawImageOnCanvas = (
-			imgState: NonNullable<ImageState["front"]>
+			imgState: NonNullable<ImageState["front"]>,
 		) =>
 			new Promise<void>((resolve, reject) => {
 				const img = new Image();
@@ -593,7 +520,7 @@ export default function Home() {
 			0,
 			0,
 			naturalCrop.width,
-			naturalCrop.height
+			naturalCrop.height,
 		);
 
 		const croppedSrc = canvas.toDataURL("image/png");
@@ -771,27 +698,27 @@ export default function Home() {
 															}
 															onClick={() => {
 																setSelectedImage(
-																	"front"
+																	"front",
 																);
 																startCrop(
-																	"front"
+																	"front",
 																);
 															}}
 															onCropClick={() =>
 																startCrop(
-																	"front"
+																	"front",
 																)
 															}
 															onCropSave={() =>
 																saveCrop(
-																	"front"
+																	"front",
 																)
 															}
 															onCropCancel={
 																cancelCrop
 															}
 															onCropAreaChange={(
-																area
+																area,
 															) =>
 																setCropAreas({
 																	...cropAreas,
@@ -834,15 +761,15 @@ export default function Home() {
 															}
 															onClick={() => {
 																setSelectedImage(
-																	"back"
+																	"back",
 																);
 																startCrop(
-																	"back"
+																	"back",
 																);
 															}}
 															onCropClick={() =>
 																startCrop(
-																	"back"
+																	"back",
 																)
 															}
 															onCropSave={() =>
@@ -852,7 +779,7 @@ export default function Home() {
 																cancelCrop
 															}
 															onCropAreaChange={(
-																area
+																area,
 															) =>
 																setCropAreas({
 																	...cropAreas,
@@ -951,7 +878,7 @@ export default function Home() {
 												{side.charAt(0).toUpperCase() +
 													side.slice(1)}
 											</button>
-										)
+										),
 									)}
 								</div>
 							</div>
@@ -1008,7 +935,7 @@ export default function Home() {
 												onChange={(e) =>
 													updateImage({
 														scale: Number.parseFloat(
-															e.target.value
+															e.target.value,
 														),
 													})
 												}
@@ -1039,7 +966,7 @@ export default function Home() {
 													updateImage({
 														rotation:
 															Number.parseInt(
-																e.target.value
+																e.target.value,
 															),
 													})
 												}
@@ -1062,7 +989,7 @@ export default function Home() {
 												onChange={(e) =>
 													updateImage({
 														x: Number.parseInt(
-															e.target.value
+															e.target.value,
 														),
 													})
 												}
@@ -1085,7 +1012,7 @@ export default function Home() {
 												onChange={(e) =>
 													updateImage({
 														y: Number.parseInt(
-															e.target.value
+															e.target.value,
 														),
 													})
 												}
