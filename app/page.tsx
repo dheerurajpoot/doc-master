@@ -107,7 +107,7 @@ function ImageWithCrop({
 					onCropClick();
 				}
 			}}>
-			<div className='relative'>
+			<div className='relative' style={{ width: 'fit-content', maxWidth: '320px' }}>
 				{!isCropping && (
 					<img
 						ref={(el) => {
@@ -117,11 +117,11 @@ function ImageWithCrop({
 						src={src || "/placeholder.svg"}
 						alt={side}
 						className={`max-w-xs h-auto ${borderColor} rounded`}
-						style={{ borderWidth: "2px" }}
+						style={{ borderWidth: "2px", display: "block" }}
 					/>
 				)}
 				{isCropping && (
-					<div className='relative'>
+					<div className='relative' style={{ width: 'fit-content', maxWidth: '320px' }}>
 						<ReactCrop
 							crop={cropPercent}
 							onChange={(_, percentCrop) => {
@@ -172,7 +172,13 @@ function ImageWithCrop({
 								src={src || "/placeholder.svg"}
 								alt={side}
 								className={`max-w-xs h-auto ${borderColor} rounded`}
-								style={{ borderWidth: "2px" }}
+								style={{ 
+									borderWidth: "2px",
+									maxWidth: "320px",
+									width: "auto",
+									height: "auto",
+									display: "block"
+								}}
 								onLoad={(e) => {
 									const el =
 										e.currentTarget as HTMLImageElement;
@@ -538,10 +544,14 @@ export default function Home() {
 		const img = imageRefs.current[side];
 		if (img && !cropAreas[side]) {
 			// Initialize crop area to cover full displayed image
+			// Get the actual displayed size (accounting for CSS constraints and scale)
 			const rect = img.getBoundingClientRect();
+			// Use the image's natural displayed dimensions
+			const displayedWidth = Math.min(img.naturalWidth, 320); // max-w-xs constraint
+			const displayedHeight = (displayedWidth / img.naturalWidth) * img.naturalHeight;
 			setCropAreas({
 				...cropAreas,
-				[side]: { x: 0, y: 0, width: rect.width, height: rect.height },
+				[side]: { x: 0, y: 0, width: displayedWidth, height: displayedHeight },
 			});
 		}
 	};
