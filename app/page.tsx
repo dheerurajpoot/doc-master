@@ -3,7 +3,7 @@
 import type React from "react";
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, Trash2, Download, Wand2, ArrowRight } from "lucide-react";
+import { Upload, Trash2, Download, Wand2, ArrowRight, Scissors } from "lucide-react";
 import ReactCrop, { type PixelCrop, type Crop } from "react-image-crop";
 
 interface ImageState {
@@ -66,22 +66,7 @@ function ImageWithCrop({
 	}) => void;
 	imageRef: (el: HTMLImageElement | null) => void;
 }) {
-	const [dragMode, setDragMode] = useState<
-		| "move"
-		| "create"
-		| "resize-nw"
-		| "resize-ne"
-		| "resize-sw"
-		| "resize-se"
-		| null
-	>(null);
-	const dragStartRef = useRef<{
-		x: number;
-		y: number;
-		area: typeof cropArea;
-	} | null>(null);
 	const imgRef = useRef<HTMLImageElement | null>(null);
-	const overlayRef = useRef<HTMLDivElement | null>(null);
 	const [cropPercent, setCropPercent] = useState<Crop | undefined>(undefined);
 	const [completedCrop, setCompletedCrop] = useState<
 		{ x: number; y: number; width: number; height: number } | undefined
@@ -255,9 +240,11 @@ export default function Home() {
 		back?: { x: number; y: number; width: number; height: number };
 	}>({});
 	const canvasRef = useRef<HTMLCanvasElement>(null);
-	const fileInputRef = useRef<HTMLInputElement>(null);
+	const fileInputRefFront = useRef<HTMLInputElement>(null);
+	const fileInputRefBack = useRef<HTMLInputElement>(null);
 	const previewWrapRef = useRef<HTMLDivElement>(null);
 	const [previewScale, setPreviewScale] = useState(1);
+	const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
 	const imageRefs = useRef<{
 		front?: HTMLImageElement;
 		back?: HTMLImageElement;
@@ -270,22 +257,43 @@ export default function Home() {
 	// A4 dimensions in pixels (at 96 DPI)
 	const A4_WIDTH = 716;
 	const A4_HEIGHT = 956;
-	const PREVIEW_W = A4_WIDTH / 2;
-	const PREVIEW_H = A4_HEIGHT / 2;
 
 	useEffect(() => {
 		const el = previewWrapRef.current;
 		if (!el) return;
 
-		const ro = new ResizeObserver(() => {
-			const width = el.clientWidth;
-			if (!width) return;
-			setPreviewScale(Math.min(1, width / PREVIEW_W));
-		});
+		const updatePreviewSize = () => {
+			// Calculate preview size based on screen width
+			const isDesktop = typeof window !== "undefined" && window.innerWidth >= 768;
+			const baseWidth = isDesktop ? A4_WIDTH * 0.7 : A4_WIDTH * 0.4;
+			const baseHeight = (baseWidth / A4_WIDTH) * A4_HEIGHT;
+			
+			setPreviewSize({ width: baseWidth, height: baseHeight });
+			
+			// Calculate scale to fit preview in container
+			const containerWidth = el.clientWidth;
+			if (containerWidth > 0) {
+				const scale = Math.min(1, containerWidth / baseWidth);
+				setPreviewScale(scale);
+			}
+		};
 
+		updatePreviewSize();
+		const ro = new ResizeObserver(updatePreviewSize);
 		ro.observe(el);
-		return () => ro.disconnect();
-	}, [PREVIEW_W]);
+		
+		// Update on window resize for responsive preview size
+		if (typeof window !== "undefined") {
+			window.addEventListener('resize', updatePreviewSize);
+		}
+		
+		return () => {
+			ro.disconnect();
+			if (typeof window !== "undefined") {
+				window.removeEventListener('resize', updatePreviewSize);
+			}
+		};
+	}, []);
 
 	useEffect(() => {
 		if (typeof window === "undefined") return;
@@ -345,6 +353,7 @@ export default function Home() {
 
 		const drawImageOnCanvas = (
 			imgState: NonNullable<ImageState["front"]>,
+			side: "front" | "back",
 		) =>
 			new Promise<void>((resolve, reject) => {
 				const img = new Image();
@@ -352,16 +361,48 @@ export default function Home() {
 					try {
 						ctx.save();
 
-						// Preview is half size, canvas is full size, so multiply positions by 2
-						const canvasX = imgState.x * 2;
-						const canvasY = imgState.y * 2;
+						// Calculate the scale factor from preview to full A4
+						const currentPreviewWidth = previewSize.width || (A4_WIDTH * 0.6);
+						const scaleFactor = A4_WIDTH / currentPreviewWidth;
+						
+						// Convert preview coordinates to canvas coordinates
+						const canvasX = imgState.x * scaleFactor;
+						const extraGap = side === "front" ? 0 : 50;
+						const canvasY = (imgState.y * scaleFactor)-extraGap;
 
+						// Get actual displayed size from preview image element
+						const previewImg = imageRefs.current[side];
+						let displayedWidth = img.width;
+						let displayedHeight = img.height;
+						
+						if (previewImg) {
+							// Get the actual rendered dimensions (accounting for preview scale transform)
+							const rect = previewImg.getBoundingClientRect();
+							// Remove the preview scale transform to get size in preview coordinates
+							displayedWidth = rect.width / previewScale;
+							displayedHeight = rect.height / previewScale;
+						} else {
+							// Fallback: calculate based on max-w-xs constraint (320px)
+							const maxPreviewWidth = 320;
+							if (img.width > maxPreviewWidth) {
+								const ratio = maxPreviewWidth / img.width;
+								displayedWidth = maxPreviewWidth;
+								displayedHeight = img.height * ratio;
+							}
+						}
+
+						// Scale displayed dimensions to canvas size
+						// This is the size BEFORE applying the imgState.scale transform
+						const baseCanvasWidth = displayedWidth * scaleFactor;
+						const baseCanvasHeight = displayedHeight * scaleFactor;
+
+						// Apply transforms in the same order as CSS: translate, rotate, scale
 						ctx.translate(canvasX, canvasY);
 						ctx.rotate((imgState.rotation * Math.PI) / 180);
 						ctx.scale(imgState.scale, imgState.scale);
 
-						// Image source is already cropped if user saved a crop
-						ctx.drawImage(img, 0, 0);
+						// Draw image at base size (the scale transform is applied via ctx.scale above)
+						ctx.drawImage(img, 0, 0, baseCanvasWidth, baseCanvasHeight);
 
 						ctx.restore();
 						resolve();
@@ -374,34 +415,90 @@ export default function Home() {
 			});
 
 		if (images.front) {
-			await drawImageOnCanvas(images.front);
+			await drawImageOnCanvas(images.front, "front");
 		}
 		if (images.back) {
-			await drawImageOnCanvas(images.back);
+			await drawImageOnCanvas(images.back, "back");
 		}
 
 		return canvas;
 	};
 
-	const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const handleImageUpload = (side: "front" | "back", e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
 		if (!file) return;
 
 		const reader = new FileReader();
 		reader.onload = (event) => {
 			const src = event.target?.result as string;
-			setImages({
-				...images,
-				[selectedImage]: {
-					src,
-					scale: 0.5, // Slightly smaller than before
-					x: (A4_WIDTH / 2) * 0.25, // Center horizontally
-					y: selectedImage === "front" ? 40 : 180, // Front: top gap, Back: below front
-					rotation: 0,
-				},
-			});
+			// Calculate initial position - center horizontally
+			const initialPreviewWidth = previewSize.width > 0 ? previewSize.width : A4_WIDTH * 0.6;
+			
+			// Create a temporary image to get actual dimensions
+			const tempImg = new Image();
+			tempImg.onload = () => {
+				// Image max width is 320px (max-w-xs CSS constraint)
+				const imageMaxWidth = 320;
+				// Calculate the displayed width (constrained by max-w-xs)
+				const naturalWidth = tempImg.width;
+				const naturalHeight = tempImg.height;
+				const displayedWidth = Math.min(naturalWidth, imageMaxWidth);
+				const displayedHeight = (displayedWidth / naturalWidth) * naturalHeight;
+				
+				// Account for scale transform (0.6) - the visual width after scaling
+				// Transform origin is "top left", so the visual width is displayedWidth * scale
+				const visualWidth = displayedWidth * 0.6;
+				
+				// Center horizontally: (previewWidth - visualWidth) / 2
+				const centeredX = (initialPreviewWidth - visualWidth) / 2;
+				
+				setImages({
+					...images,
+					[side]: {
+						src,
+						scale: 0.8,
+						x: Math.max(0, centeredX-30), // Center horizontally
+						y: side === "front" ? 50 : 240, // Preview gap
+						rotation: 0,
+					},
+				});
+				setSelectedImage(side);
+			};
+			tempImg.onerror = () => {
+				// Fallback if image fails to load
+				const imageMaxWidth = 320;
+				const visualWidth = imageMaxWidth * 0.6;
+				const centeredX = (initialPreviewWidth - visualWidth) / 2;
+				setImages({
+					...images,
+					[side]: {
+						src,
+						scale: 0.6,
+						x: Math.max(0, centeredX),
+						y: side === "front" ? 40 : 180,
+						rotation: 0,
+					},
+				});
+				setSelectedImage(side);
+			};
+			tempImg.src = src;
 		};
 		reader.readAsDataURL(file);
+	};
+
+	const handleDeleteImage = (side: "front" | "back") => {
+		const newImages = { ...images };
+		delete newImages[side];
+		setImages(newImages);
+		setCropAreas({
+			...cropAreas,
+			[side]: undefined,
+		});
+		// If deleted image was selected, select the other one or front
+		if (selectedImage === side) {
+			const otherSide = side === "front" ? "back" : "front";
+			setSelectedImage(images[otherSide] ? otherSide : "front");
+		}
 	};
 
 	const updateImage = (updates: Partial<ImageState[keyof ImageState]>) => {
@@ -415,8 +512,24 @@ export default function Home() {
 
 	const onRemoveBackground = async () => {
 		if (!images[selectedImage]) return;
+		console.log(images[selectedImage]);
 		setBgRemovalLoading(true);
-		alert("Background removal is not available yet. Coming soon...");
+		try {
+			const response = await fetch("/api/remove-bg", {
+				method: "POST",
+				body: JSON.stringify({ image: images[selectedImage]?.src }),
+				headers: {
+					"Content-Type": "application/json",
+				},
+			});
+			const data = await response.json();
+			console.log("data: ", data);
+			if (data.data) {
+				updateImage({ src: data.data });
+			}
+		} catch (error) {
+			console.error("Background removal failed:", error);
+		}
 		setBgRemovalLoading(false);
 	};
 
@@ -574,19 +687,19 @@ export default function Home() {
 								</p>
 							</div>
 
-							<div className='bg-card border border-border rounded-2xl overflow-hidden shadow-lg'>
+							<div className='bg-card border border-border rounded-xl overflow-hidden shadow-lg'>
 								<div className='flex items-center justify-center bg-muted p-4'>
 									<div
 										ref={previewWrapRef}
 										className='w-full flex justify-center overflow-hidden'
 										style={{
-											height: PREVIEW_H * previewScale,
+											height: previewSize.height > 0 ? previewSize.height * previewScale : 'auto',
 										}}>
 										<div
 											className='relative bg-white rounded-lg shadow-md overflow-hidden border border-dashed border-muted-foreground/40'
 											style={{
-												width: PREVIEW_W,
-												height: PREVIEW_H,
+												width: previewSize.width > 0 ? previewSize.width : A4_WIDTH * 0.6,
+												height: previewSize.height > 0 ? previewSize.height : (A4_WIDTH * 0.6 / A4_WIDTH) * A4_HEIGHT,
 												transform: `scale(${previewScale})`,
 												transformOrigin: "top left",
 											}}>
@@ -643,9 +756,6 @@ export default function Home() {
 															}
 															onClick={() => {
 																setSelectedImage(
-																	"front",
-																);
-																startCrop(
 																	"front",
 																);
 															}}
@@ -708,9 +818,6 @@ export default function Home() {
 																setSelectedImage(
 																	"back",
 																);
-																startCrop(
-																	"back",
-																);
 															}}
 															onCropClick={() =>
 																startCrop(
@@ -750,14 +857,13 @@ export default function Home() {
 								<div className='flex flex-col sm:flex-row gap-3'>
 									<Button
 										onClick={handlePrint}
-										className='bg-accent hover:bg-accent/90 w-full sm:w-auto shadow-md'>
+										className='bg-linear-to-r from-accent to-accent/80 hover:from-accent/90 hover:to-accent/70 text-white font-semibold w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-200'>
 										<Download className='w-4 h-4 mr-2' />
 										Print
 									</Button>
 									<Button
 										onClick={downloadPDF}
-										variant='outline'
-										className='w-full sm:w-auto bg-transparent shadow-sm'>
+										className='w-full sm:w-auto bg-linear-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200'>
 										<ArrowRight className='w-4 h-4 mr-2' />
 										Download
 									</Button>
@@ -802,61 +908,148 @@ export default function Home() {
 
 						{/* Controls */}
 						<div className='space-y-4 lg:space-y-6'>
-							{/* Image Selection */}
-							<div className='bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-md'>
-								<h3 className='font-semibold mb-3 text-foreground'>
-									Select Image
+							{/* Front Image Upload */}
+							<div className='bg-card border border-border rounded-xl p-4 sm:p-6 shadow-md'>
+								<h3 className='font-semibold mb-4 text-foreground text-sm sm:text-base'>
+									Front Image
 								</h3>
-								<div className='inline-flex w-full gap-0 rounded-lg border border-border overflow-hidden'>
-									{(["front", "back"] as const).map(
-										(side) => (
+								{!images.front ? (
+									<>
+										<input
+											ref={fileInputRefFront}
+											type='file'
+											accept='image/*'
+											onChange={(e) => handleImageUpload("front", e)}
+											className='hidden'
+										/>
+										<Button
+											onClick={() =>
+												fileInputRefFront.current?.click()
+											}
+											variant='outline'
+											className='w-full shadow-sm hover:text-gray-500 hover:bg-primary/5 hover:border-primary/50 transition-all'>
+											<Upload className='w-4 h-4 mr-2' />
+											Upload Front
+										</Button>
+									</>
+								) : (
+									<div className='relative group'>
+										<div
+											onClick={() => setSelectedImage("front")}
+											className={`relative overflow-hidden rounded-lg border-2 cursor-pointer transition-all ${
+												selectedImage === "front"
+													? "border-primary ring-2 ring-primary/20"
+													: "border-border hover:border-primary/50"
+											}`}>
+											<img
+												src={images.front.src}
+												alt='Front'
+												className='w-full h-auto max-h-48 object-contain'
+											/>
 											<button
-												key={side}
-												onClick={() =>
-													setSelectedImage(side)
-												}
-												className={`flex-1 py-2.5 px-3 font-medium transition-all text-sm sm:text-base ${
-													selectedImage === side
-														? "bg-primary text-primary-foreground"
-														: "bg-background text-foreground hover:bg-muted"
-												}`}>
-												{side.charAt(0).toUpperCase() +
-													side.slice(1)}
+												onClick={(e) => {
+													e.stopPropagation();
+													handleDeleteImage("front");
+												}}
+												className='absolute top-2 cursor-pointer right-2 bg-destructive text-white rounded-full p-1.5 shadow-lg hover:bg-destructive/90 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100'>
+												<Trash2 className='w-4 h-4 text-white' />
 											</button>
-										),
-									)}
-								</div>
+										</div>
+										{selectedImage === "front" && (
+											<div className='mt-2 text-xs text-center text-primary font-medium'>
+												Selected
+											</div>
+										)}
+									</div>
+								)}
 							</div>
 
-							{/* Upload */}
-							<div className='bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-md'>
-								<h3 className='font-semibold mb-4 text-foreground'>
-									Upload
+							{/* Back Image Upload */}
+							<div className='bg-card border border-border rounded-xl p-4 sm:p-6 shadow-md'>
+								<h3 className='font-semibold mb-4 text-foreground text-sm sm:text-base'>
+									Back Image
 								</h3>
-								<input
-									ref={fileInputRef}
-									type='file'
-									accept='image/*'
-									onChange={handleImageUpload}
-									className='hidden'
-								/>
-								<Button
-									onClick={() =>
-										fileInputRef.current?.click()
-									}
-									variant='outline'
-									className='w-full shadow-sm'>
-									<Upload className='w-4 h-4 mr-2' />
-									Choose Image
-								</Button>
+								{!images.back ? (
+									<>
+										<input
+											ref={fileInputRefBack}
+											type='file'
+											accept='image/*'
+											onChange={(e) => handleImageUpload("back", e)}
+											className='hidden'
+										/>
+										<Button
+											onClick={() =>
+												fileInputRefBack.current?.click()
+											}
+											variant='outline'
+											className='w-full shadow-sm hover:text-gray-500 hover:bg-primary/5 hover:border-primary/50 transition-all'>
+											<Upload className='w-4 h-4 mr-2' />
+											Upload Back
+										</Button>
+									</>
+								) : (
+									<div className='relative group'>
+										<div
+											onClick={() => setSelectedImage("back")}
+											className={`relative overflow-hidden rounded-lg border-2 cursor-pointer transition-all ${
+												selectedImage === "back"
+													? "border-primary ring-2 ring-primary/20"
+													: "border-border hover:border-primary/50"
+											}`}>
+											<img
+												src={images.back.src}
+												alt='Back'
+												className='w-full h-auto max-h-48 object-contain'
+											/>
+											<button
+												onClick={(e) => {
+													e.stopPropagation();
+													handleDeleteImage("back");
+												}}
+												className='absolute top-2 cursor-pointer right-2 bg-destructive text-white rounded-full p-1.5 shadow-lg hover:bg-destructive/90 transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100'>
+												<Trash2 className='w-4 h-4 text-white' />
+											</button>
+										</div>
+										{selectedImage === "back" && (
+											<div className='mt-2 text-xs text-center text-primary font-medium'>
+												Selected
+											</div>
+										)}
+									</div>
+								)}
 							</div>
 
 							{/* Adjustments */}
 							{images[selectedImage] && (
 								<>
+								{/* Tools */}
+								<div className='bg-card border border-border rounded-xl p-4 sm:p-6 space-y-3'>
+										<h3 className='font-semibold text-foreground mb-4 text-sm sm:text-base'>
+											Tools
+										</h3>
+										<div className='flex flex-col gap-3'>
+											<Button
+												onClick={() => startCrop(selectedImage)}
+												disabled={croppingImage === selectedImage}
+												className='w-full bg-linear-to-r from-secondary to-secondary/80 hover:from-secondary/90 hover:to-secondary/70 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed'>
+												<Scissors className='w-4 h-4 mr-2' />
+												{croppingImage === selectedImage ? "Cropping..." : "Crop Image"}
+											</Button>
+											<Button
+												onClick={onRemoveBackground}
+												disabled={bgRemovalLoading}
+												className='w-full bg-linear-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed'>
+												<Wand2 className={`w-4 h-4 mr-2 ${bgRemovalLoading ? 'animate-spin' : ''}`} />
+												{bgRemovalLoading
+													? "Removing Background..."
+													: "Remove Background"}
+											</Button>
+										</div>
+									</div>
 									<div className='bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-5 shadow-md'>
-										<h3 className='font-semibold text-foreground'>
-											Adjustments
+										<h3 className='font-semibold text-foreground text-sm sm:text-base'>
+											Image Controls
 										</h3>
 
 										{/* Scale */}
@@ -965,39 +1158,6 @@ export default function Home() {
 											/>
 										</div>
 									</div>
-
-									{/* AI Tools */}
-									<div className='bg-card border border-border rounded-xl p-4 sm:p-6 space-y-3'>
-										<h3 className='font-semibold text-foreground mb-4'>
-											AI Tools
-										</h3>
-										<Button
-											onClick={onRemoveBackground}
-											disabled={bgRemovalLoading}
-											className='w-full bg-accent hover:bg-accent/90'>
-											<Wand2 className='w-4 h-4 mr-2' />
-											{bgRemovalLoading
-												? "Removing..."
-												: "Remove Background"}
-										</Button>
-									</div>
-
-									{/* Clear */}
-									<Button
-										onClick={() => {
-											const newImages = { ...images };
-											delete newImages[selectedImage];
-											setImages(newImages);
-											setCropAreas({
-												...cropAreas,
-												[selectedImage]: undefined,
-											});
-										}}
-										variant='destructive'
-										className='w-full'>
-										<Trash2 className='w-4 h-4 mr-2' />
-										Clear Image
-									</Button>
 								</>
 							)}
 						</div>

@@ -1,24 +1,54 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server";
+import { removeBackground } from "@imgly/background-removal-node";
 
 export async function POST(request: NextRequest) {
-  try {
-    const { image } = await request.json()
+	try {
+		const { image } = await request.json();
 
-    // This is a placeholder for background removal
-    // In production, you would integrate with a real API like:
-    // - remove.bg (free tier: 50 API calls/month)
-    // - Unscreen.com
-    // - PhotoScissors
-    // - Cleanup.pictures
+		if (!image) {
+			return NextResponse.json(
+				{ message: "No image provided" },
+				{ status: 400 },
+			);
+		}
 
-    // For now, we'll return the image as-is with a note
-    // You can replace this with actual API integration
+		// Convert base64 data URL to Blob
+		let imageSource: Blob | Buffer;
+		
+		if (image.startsWith("data:")) {
+			// Extract base64 data and content type
+			const [prefix, base64] = image.split(",");
+			const match = prefix.match(/data:(.*?);base64/);
+			const contentType = match?.[1] || "image/png";
+			
+			// Convert base64 to Buffer
+			const buffer = Buffer.from(base64, "base64");
+			
+			// Create Blob from Buffer
+			imageSource = new Blob([buffer], { type: contentType });
+		} else {
+			// If it's already a URL or file path, use it directly
+			imageSource = image;
+		}
 
-    return NextResponse.json({
-      data: image,
-      message: "Background removal placeholder. Integrate with remove.bg or similar service.",
-    })
-  } catch (error) {
-    return NextResponse.json({ error: "Failed to process image" }, { status: 500 })
-  }
+		const blob = await removeBackground(imageSource);
+
+		const buffer = await blob.arrayBuffer();
+		const base64 = Buffer.from(buffer).toString("base64");
+		const processedImage = `data:image/png;base64,${base64}`;
+
+		return NextResponse.json({
+			data: processedImage,
+			message: "Background removed successfully",
+		});
+	} catch (error) {
+		console.error("Background removal error:", error);
+		return NextResponse.json(
+			{ 
+				message: error instanceof Error ? error.message : "Failed to process image",
+				error: String(error)
+			},
+			{ status: 500 },
+		);
+	}
 }
