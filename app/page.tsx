@@ -518,7 +518,6 @@ export default function Home() {
 
 	const onRemoveBackground = async () => {
 		if (!images[selectedImage]) return;
-		console.log(images[selectedImage]);
 		setBgRemovalLoading(true);
 		try {
 			const response = await fetch("/api/remove-bg", {
@@ -529,7 +528,6 @@ export default function Home() {
 				},
 			});
 			const data = await response.json();
-			console.log("data: ", data);
 			if (data.data) {
 				updateImage({ src: data.data });
 			}
