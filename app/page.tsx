@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, Trash2, Download, Wand2, ArrowRight, Scissors } from "lucide-react";
 import ReactCrop, { type PixelCrop, type Crop } from "react-image-crop";
+import { removeBackground } from "@imgly/background-removal";
 
 interface ImageState {
 	front?: {
@@ -520,32 +521,55 @@ export default function Home() {
 		if (!images[selectedImage]) return;
 		setBgRemovalLoading(true);
 		try {
-			const response = await fetch("/api/remove-bg", {
-				method: "POST",
-				body: JSON.stringify({ image: images[selectedImage]?.src }),
-				headers: {
-					"Content-Type": "application/json",
-				},
-			});
-			const data = await response.json();
-			if (data.data) {
-				updateImage({ src: data.data });
+			const imageSrc = images[selectedImage]?.src;
+			if (!imageSrc) {
+				setBgRemovalLoading(false);
+				return;
 			}
+
+			// Convert data URL or URL to Blob for processing
+			let imageBlob: Blob;
+			if (imageSrc.startsWith("data:")) {
+				// Convert data URL to Blob
+				const response = await fetch(imageSrc);
+				imageBlob = await response.blob();
+			} else {
+				// Fetch from URL
+				const response = await fetch(imageSrc);
+				imageBlob = await response.blob();
+			}
+
+			const blob = await removeBackground(imageBlob);
+
+			// Convert result blob to data URL using Promise for proper async handling
+			const base64data = await new Promise<string>((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onloadend = () => {
+					if (reader.result && typeof reader.result === "string") {
+						resolve(reader.result);
+					} else {
+						reject(new Error("Failed to read blob as data URL"));
+					}
+				};
+				reader.onerror = () => {
+					reject(new Error("Failed to convert blob to data URL"));
+				};
+				reader.readAsDataURL(blob);
+			});
+
+			updateImage({ src: base64data });
 		} catch (error) {
 			console.error("Background removal failed:", error);
+		} finally {
+			setBgRemovalLoading(false);
 		}
-		setBgRemovalLoading(false);
 	};
 
 	const startCrop = (side: "front" | "back") => {
 		setCroppingImage(side);
 		const img = imageRefs.current[side];
 		if (img && !cropAreas[side]) {
-			// Initialize crop area to cover full displayed image
-			// Get the actual displayed size (accounting for CSS constraints and scale)
-			const rect = img.getBoundingClientRect();
-			// Use the image's natural displayed dimensions
-			const displayedWidth = Math.min(img.naturalWidth, 320); // max-w-xs constraint
+			const displayedWidth = Math.min(img.naturalWidth, 320);
 			const displayedHeight = (displayedWidth / img.naturalWidth) * img.naturalHeight;
 			setCropAreas({
 				...cropAreas,
