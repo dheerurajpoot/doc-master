@@ -8,6 +8,7 @@ import Image from "next/image";
 
 const mainLinks = [
 	{ href: "/", label: "Home" },
+	{ href: "/remove-bg", label: "Remove Background" },
 	{ href: "/about", label: "About" },
 	{ href: "/contact", label: "Contact" },
 	{ href: "/terms", label: "Terms" },

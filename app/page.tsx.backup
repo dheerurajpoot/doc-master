@@ -3,9 +3,18 @@
 import type React from "react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Upload, Trash2, Download, Wand2 } from "lucide-react";
+import {
+	Upload,
+	Trash2,
+	Download,
+	Wand2,
+	RotateCw,
+	ZoomIn,
+	ZoomOut,
+	Scissors,
+} from "lucide-react";
+import ReactCrop, { type Crop } from "react-image-crop";
 import { removeBackground } from "@imgly/background-removal";
-import { TransformableImage } from "@/components/TransformableImage";
 import "react-image-crop/dist/ReactCrop.css";
 
 interface ImageState {
@@ -31,6 +40,304 @@ type DownloadSettings = {
 };
 
 // On-image controls component
+function ImageControls({
+	side,
+	onRotate,
+	onZoomIn,
+	onZoomOut,
+	onCrop,
+	onDelete,
+}: {
+	side: "front" | "back";
+	onRotate: () => void;
+	onZoomIn: () => void;
+	onZoomOut: () => void;
+	onCrop: () => void;
+	onDelete: () => void;
+}) {
+	return (
+		<div className='absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 bg-black/60 rounded-lg p-1'>
+			<button
+				onClick={(e) => {
+					e.stopPropagation();
+					onRotate();
+				}}
+				className='p-1.5 bg-white/90 hover:bg-white rounded text-gray-700 transition-colors'
+				title='Rotate'>
+				<RotateCw className='w-3.5 h-3.5' />
+			</button>
+			<button
+				onClick={(e) => {
+					e.stopPropagation();
+					onZoomIn();
+				}}
+				className='p-1.5 bg-white/90 hover:bg-white rounded text-gray-700 transition-colors'
+				title='Zoom In'>
+				<ZoomIn className='w-3.5 h-3.5' />
+			</button>
+			<button
+				onClick={(e) => {
+					e.stopPropagation();
+					onZoomOut();
+				}}
+				className='p-1.5 bg-white/90 hover:bg-white rounded text-gray-700 transition-colors'
+				title='Zoom Out'>
+				<ZoomOut className='w-3.5 h-3.5' />
+			</button>
+			<button
+				onClick={(e) => {
+					e.stopPropagation();
+					onCrop();
+				}}
+				className='p-1.5 bg-white/90 hover:bg-white rounded text-gray-700 transition-colors'
+				title='Crop'>
+				<Scissors className='w-3.5 h-3.5' />
+			</button>
+			<button
+				onClick={(e) => {
+					e.stopPropagation();
+					onDelete();
+				}}
+				className='p-1.5 bg-red-500 hover:bg-red-600 rounded text-white transition-colors'
+				title='Delete'>
+				<Trash2 className='w-3.5 h-3.5' />
+			</button>
+		</div>
+	);
+}
+
+function ImageWithCrop({
+	side,
+	src,
+	x,
+	y,
+	rotation,
+	scale,
+	isSelected,
+	isCropping,
+	cropArea,
+	onClick,
+	onCropClick,
+	onCropSave,
+	onCropCancel,
+	onCropAreaChange,
+	onRotate,
+	onZoomIn,
+	onZoomOut,
+	onDelete,
+	imageRef,
+}: {
+	side: "front" | "back";
+	src: string;
+	x: number;
+	y: number;
+	rotation: number;
+	scale: number;
+	isSelected: boolean;
+	isCropping: boolean;
+	cropArea?: { x: number; y: number; width: number; height: number };
+	onClick: () => void;
+	onCropClick: () => void;
+	onCropSave: () => void;
+	onCropCancel: () => void;
+	onCropAreaChange: (area: {
+		x: number;
+		y: number;
+		width: number;
+		height: number;
+	}) => void;
+	onRotate: () => void;
+	onZoomIn: () => void;
+	onZoomOut: () => void;
+	onDelete: () => void;
+	imageRef: (el: HTMLImageElement | null) => void;
+}) {
+	const imgRef = useRef<HTMLImageElement | null>(null);
+	const [cropPercent, setCropPercent] = useState<Crop | undefined>(undefined);
+	const [isDragging, setIsDragging] = useState(false);
+	const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+	useEffect(() => {
+		if (isCropping && imgRef.current && !cropArea) {
+			const img = imgRef.current;
+			onCropAreaChange({
+				x: 0,
+				y: 0,
+				width: img.width,
+				height: img.height,
+			});
+		}
+	}, [isCropping, cropArea, onCropAreaChange]);
+
+	const borderColor =
+		side === "front" ? "border-primary" : "border-secondary";
+	const ringColor = side === "front" ? "ring-primary" : "ring-secondary";
+
+	const handleMouseDown = (e: React.MouseEvent) => {
+		if (isCropping || !isSelected) return;
+		setIsDragging(true);
+		setDragStart({ x: e.clientX - x, y: e.clientY - y });
+	};
+
+	const handleMouseMove = (e: React.MouseEvent) => {
+		if (!isDragging) return;
+		const newX = e.clientX - dragStart.x;
+		const newY = e.clientY - dragStart.y;
+		// Update position through parent
+		onClick();
+	};
+
+	const handleMouseUp = () => {
+		setIsDragging(false);
+	};
+
+	return (
+		<div
+			className={`absolute group ${
+				isSelected ? `ring-2 ${ringColor}` : ""
+			} ${isCropping ? "z-10" : ""}`}
+			style={{
+				transform: `translate(${x}px, ${y}px) rotate(${rotation}deg) scale(${scale})`,
+				transformOrigin: "top left",
+				cursor: isDragging
+					? "grabbing"
+					: isSelected && !isCropping
+					? "grab"
+					: "pointer",
+			}}
+			onClick={() => {
+				if (!isCropping) {
+					onClick();
+				}
+			}}
+			onMouseDown={handleMouseDown}
+			onMouseMove={handleMouseMove}
+			onMouseUp={handleMouseUp}
+			onMouseLeave={handleMouseUp}>
+			<div
+				className='relative'
+				style={{ width: "fit-content", maxWidth: "280px" }}>
+				{!isCropping && (
+					<>
+						<img
+							ref={(el) => {
+								imgRef.current = el;
+								imageRef(el);
+							}}
+							src={src || "/placeholder.svg"}
+							alt={side}
+							className={`max-w-[280px] h-auto ${borderColor} rounded`}
+							style={{ borderWidth: "2px", display: "block" }}
+						/>
+						{isSelected && (
+							<ImageControls
+								side={side}
+								onRotate={onRotate}
+								onZoomIn={onZoomIn}
+								onZoomOut={onZoomOut}
+								onCrop={onCropClick}
+								onDelete={onDelete}
+							/>
+						)}
+					</>
+				)}
+				{isCropping && (
+					<div
+						className='relative'
+						style={{ width: "fit-content", maxWidth: "280px" }}>
+						<ReactCrop
+							crop={cropPercent}
+							onChange={(_, percentCrop) => {
+								setCropPercent(percentCrop);
+								const imgEl = imgRef.current;
+								if (!imgEl || !percentCrop) return;
+								onCropAreaChange({
+									x: Math.round(
+										((percentCrop.x ?? 0) / 100) *
+											imgEl.width
+									),
+									y: Math.round(
+										((percentCrop.y ?? 0) / 100) *
+											imgEl.height
+									),
+									width: Math.round(
+										((percentCrop.width ?? 0) / 100) *
+											imgEl.width
+									),
+									height: Math.round(
+										((percentCrop.height ?? 0) / 100) *
+											imgEl.height
+									),
+								});
+							}}
+							keepSelection
+							minWidth={40}
+							minHeight={40}>
+							<img
+								ref={(el) => {
+									imgRef.current = el;
+									imageRef(el);
+								}}
+								src={src || "/placeholder.svg"}
+								alt={side}
+								className={`max-w-[280px] h-auto ${borderColor} rounded`}
+								style={{
+									borderWidth: "2px",
+									maxWidth: "280px",
+									display: "block",
+								}}
+								onLoad={(e) => {
+									const el =
+										e.currentTarget as HTMLImageElement;
+									const w = el.width;
+									const h = el.height;
+									if (cropArea) {
+										setCropPercent({
+											unit: "%",
+											x: (cropArea.x / w) * 100,
+											y: (cropArea.y / h) * 100,
+											width: (cropArea.width / w) * 100,
+											height: (cropArea.height / h) * 100,
+										});
+									} else {
+										setCropPercent({
+											unit: "%",
+											x: 5,
+											y: 5,
+											width: 90,
+											height: 90,
+										});
+									}
+								}}
+							/>
+						</ReactCrop>
+						<div className='mt-2 flex gap-2 justify-center'>
+							<Button
+								onClick={(e) => {
+									e.stopPropagation();
+									onCropSave();
+								}}
+								size='sm'
+								className='text-xs px-3 py-1'>
+								Save
+							</Button>
+							<Button
+								onClick={(e) => {
+									e.stopPropagation();
+									onCropCancel();
+								}}
+								size='sm'
+								variant='outline'
+								className='text-xs px-3 py-1'>
+								Cancel
+							</Button>
+						</div>
+					</div>
+				)}
+			</div>
+		</div>
+	);
+}
 
 export default function Home() {
 	const [images, setImages] = useState<ImageState>({});
@@ -165,15 +472,13 @@ export default function Home() {
 						const baseCanvasWidth = displayedWidth * scaleFactor;
 						const baseCanvasHeight = displayedHeight * scaleFactor;
 
-						// With center-center transform, translate to center point
 						ctx.translate(canvasX, canvasY);
 						ctx.rotate((imgState.rotation * Math.PI) / 180);
 						ctx.scale(imgState.scale, imgState.scale);
-						// Draw from center (offset by half width/height)
 						ctx.drawImage(
 							img,
-							-baseCanvasWidth / 2,
-							-baseCanvasHeight / 2,
+							0,
+							0,
 							baseCanvasWidth,
 							baseCanvasHeight
 						);
@@ -222,35 +527,16 @@ export default function Home() {
 					);
 					const displayedHeight =
 						(displayedWidth / naturalWidth) * naturalHeight;
-
-					// With center-center transform origin, position is the center point
-					// Images are scaled to 0.8, so account for that in positioning
-					const scaledHeight = displayedHeight * 0.8;
-
-					// Calculate center X: preview center (horizontal center)
-					const centerX = initialPreviewWidth / 2;
-
-					// Calculate center Y:
-					// Front: Half of scaled height + top padding
-					// Back: Front position + scaled height + gap
-					const topPadding = 40;
-					const gapBetweenImages = 30;
-
-					const centerY =
-						side === "front"
-							? scaledHeight / 2 + topPadding
-							: scaledHeight / 2 +
-							  topPadding +
-							  scaledHeight +
-							  gapBetweenImages;
+					const visualWidth = displayedWidth * 0.8;
+					const centeredX = (initialPreviewWidth - visualWidth) / 2;
 
 					setImages((prev) => ({
 						...prev,
 						[side]: {
 							src,
 							scale: 0.8,
-							x: centerX,
-							y: centerY,
+							x: Math.max(0, centeredX - 20),
+							y: side === "front" ? 30 : 180,
 							rotation: 0,
 						},
 					}));
@@ -308,28 +594,15 @@ export default function Home() {
 				};
 				tempImg.onerror = () => {
 					const imageMaxWidth = 280;
-					const estimatedHeight = 200; // Fallback estimated height
-					const scaledHeight = estimatedHeight * 0.8;
-
-					// With center-center, use center point
-					const centerX = initialPreviewWidth / 2;
-					const topPadding = 40;
-					const gapBetweenImages = 30;
-					const centerY =
-						side === "front"
-							? scaledHeight / 2 + topPadding
-							: scaledHeight / 2 +
-							  topPadding +
-							  scaledHeight +
-							  gapBetweenImages;
-
+					const visualWidth = imageMaxWidth * 0.8;
+					const centeredX = (initialPreviewWidth - visualWidth) / 2;
 					setImages((prev) => ({
 						...prev,
 						[side]: {
 							src,
 							scale: 0.8,
-							x: centerX,
-							y: centerY,
+							x: Math.max(0, centeredX),
+							y: side === "front" ? 30 : 180,
 							rotation: 0,
 						},
 					}));
@@ -405,19 +678,27 @@ export default function Home() {
 		}
 	};
 
-	const handleUpdateTransform = (
-		side: "front" | "back",
-		updates: {
-			x?: number;
-			y?: number;
-			scale?: number;
-			rotation?: number;
-		}
-	) => {
+	const handleRotate = (side: "front" | "back") => {
 		if (images[side]) {
+			const currentRotation = images[side]!.rotation;
+			const newRotation = (currentRotation + 15) % 360;
 			setImages((prev) => ({
 				...prev,
-				[side]: { ...prev[side]!, ...updates },
+				[side]: { ...prev[side]!, rotation: newRotation },
+			}));
+		}
+	};
+
+	const handleZoom = (side: "front" | "back", direction: "in" | "out") => {
+		if (images[side]) {
+			const currentScale = images[side]!.scale;
+			const newScale =
+				direction === "in"
+					? Math.min(currentScale + 0.1, 2)
+					: Math.max(currentScale - 0.1, 0.3);
+			setImages((prev) => ({
+				...prev,
+				[side]: { ...prev[side]!, scale: newScale },
 			}));
 		}
 	};
@@ -642,7 +923,7 @@ export default function Home() {
 										) : (
 											<>
 												{images.front && (
-													<TransformableImage
+													<ImageWithCrop
 														side='front'
 														src={images.front.src}
 														x={images.front.x}
@@ -687,12 +968,21 @@ export default function Home() {
 																front: area,
 															})
 														}
-														onUpdateTransform={(
-															updates
-														) =>
-															handleUpdateTransform(
+														onRotate={() =>
+															handleRotate(
+																"front"
+															)
+														}
+														onZoomIn={() =>
+															handleZoom(
 																"front",
-																updates
+																"in"
+															)
+														}
+														onZoomOut={() =>
+															handleZoom(
+																"front",
+																"out"
 															)
 														}
 														onDelete={() =>
@@ -707,7 +997,7 @@ export default function Home() {
 													/>
 												)}
 												{images.back && (
-													<TransformableImage
+													<ImageWithCrop
 														side='back'
 														src={images.back.src}
 														x={images.back.x}
@@ -751,12 +1041,19 @@ export default function Home() {
 																back: area,
 															})
 														}
-														onUpdateTransform={(
-															updates
-														) =>
-															handleUpdateTransform(
+														onRotate={() =>
+															handleRotate("back")
+														}
+														onZoomIn={() =>
+															handleZoom(
 																"back",
-																updates
+																"in"
+															)
+														}
+														onZoomOut={() =>
+															handleZoom(
+																"back",
+																"out"
 															)
 														}
 														onDelete={() =>
@@ -933,8 +1230,7 @@ export default function Home() {
 										: "Remove BG"}
 								</Button>
 								<p className='text-xs text-muted-foreground mt-2'>
-									💡 Drag corners to resize • Drag bottom
-									handle to rotate
+									💡 Hover over image for quick controls
 								</p>
 							</div>
 						)}
