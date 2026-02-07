@@ -267,6 +267,11 @@ export default function Home() {
 								},
 							});
 
+							// Auto-crop transparent areas
+							const croppedBlob = await autoCropTransparentImage(
+								blob
+							);
+
 							const processedSrc = await new Promise<string>(
 								(resolve, reject) => {
 									const bgReader = new FileReader();
@@ -285,7 +290,7 @@ export default function Home() {
 										}
 									};
 									bgReader.onerror = reject;
-									bgReader.readAsDataURL(blob);
+									bgReader.readAsDataURL(croppedBlob);
 								}
 							);
 
@@ -382,6 +387,9 @@ export default function Home() {
 				},
 			});
 
+			// Auto-crop transparent areas
+			const croppedBlob = await autoCropTransparentImage(blob);
+
 			const base64data = await new Promise<string>((resolve, reject) => {
 				const reader = new FileReader();
 				reader.onloadend = () => {
@@ -394,7 +402,7 @@ export default function Home() {
 				reader.onerror = () => {
 					reject(new Error("Failed to convert blob to data URL"));
 				};
-				reader.readAsDataURL(blob);
+				reader.readAsDataURL(croppedBlob);
 			});
 
 			updateImage({ src: base64data });
@@ -403,6 +411,131 @@ export default function Home() {
 		} finally {
 			setBgRemovalLoading(false);
 		}
+	};
+
+	// Auto-crop transparent areas from image
+	const autoCropTransparentImage = async (blob: Blob): Promise<Blob> => {
+		return new Promise((resolve, reject) => {
+			const img = new Image();
+			const url = URL.createObjectURL(blob);
+
+			img.onload = () => {
+				try {
+					// Create canvas to analyze the image
+					const canvas = document.createElement("canvas");
+					canvas.width = img.width;
+					canvas.height = img.height;
+					const ctx = canvas.getContext("2d", {
+						willReadFrequently: true,
+					});
+
+					if (!ctx) {
+						URL.revokeObjectURL(url);
+						resolve(blob); // Return original if can't process
+						return;
+					}
+
+					ctx.drawImage(img, 0, 0);
+					const imageData = ctx.getImageData(
+						0,
+						0,
+						img.width,
+						img.height
+					);
+					const data = imageData.data;
+
+					// Find content boundaries
+					let minX = img.width;
+					let minY = img.height;
+					let maxX = 0;
+					let maxY = 0;
+
+					// Scan for non-transparent pixels
+					for (let y = 0; y < img.height; y++) {
+						for (let x = 0; x < img.width; x++) {
+							const alpha = data[(y * img.width + x) * 4 + 3];
+							if (alpha > 10) {
+								// Consider pixels with alpha > 10 as content
+								if (x < minX) minX = x;
+								if (x > maxX) maxX = x;
+								if (y < minY) minY = y;
+								if (y > maxY) maxY = y;
+							}
+						}
+					}
+
+					// Add small padding (5% of content size)
+					const contentWidth = maxX - minX;
+					const contentHeight = maxY - minY;
+					const paddingX = Math.max(
+						5,
+						Math.floor(contentWidth * 0.02)
+					);
+					const paddingY = Math.max(
+						5,
+						Math.floor(contentHeight * 0.02)
+					);
+
+					minX = Math.max(0, minX - paddingX);
+					minY = Math.max(0, minY - paddingY);
+					maxX = Math.min(img.width - 1, maxX + paddingX);
+					maxY = Math.min(img.height - 1, maxY + paddingY);
+
+					const cropWidth = maxX - minX + 1;
+					const cropHeight = maxY - minY + 1;
+
+					// Create cropped canvas
+					const croppedCanvas = document.createElement("canvas");
+					croppedCanvas.width = cropWidth;
+					croppedCanvas.height = cropHeight;
+					const croppedCtx = croppedCanvas.getContext("2d");
+
+					if (!croppedCtx) {
+						URL.revokeObjectURL(url);
+						resolve(blob);
+						return;
+					}
+
+					// Draw cropped content
+					croppedCtx.drawImage(
+						img,
+						minX,
+						minY,
+						cropWidth,
+						cropHeight,
+						0,
+						0,
+						cropWidth,
+						cropHeight
+					);
+
+					// Convert to blob
+					croppedCanvas.toBlob(
+						(croppedBlob) => {
+							URL.revokeObjectURL(url);
+							if (croppedBlob) {
+								resolve(croppedBlob);
+							} else {
+								resolve(blob); // Return original on error
+							}
+						},
+						"image/png",
+						1.0
+					);
+				} catch (error) {
+					URL.revokeObjectURL(url);
+					console.error("Auto-crop failed:", error);
+					resolve(blob); // Return original on error
+				}
+			};
+
+			img.onerror = () => {
+				URL.revokeObjectURL(url);
+				reject(new Error("Failed to load image for auto-crop"));
+			};
+
+			img.src = url;
+		});
 	};
 
 	const handleUpdateTransform = (
